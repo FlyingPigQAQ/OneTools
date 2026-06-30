@@ -1,0 +1,45 @@
+appId: com.onetools.app
+productName: OneTools
+copyright: Copyright © 2026
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - "out/**/*"
+  - "!node_modules"
+  - "!src"
+  - "!scripts"
+  - "!*.config.ts"
+  - "!tsconfig*.json"
+
+extraResources:
+  - from: resources/ffmpeg
+    to: ffmpeg
+    filter:
+      - "**/*"
+
+mac:
+  category: public.app-category.utilities
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  icon: resources/icon.icns
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${name}-${version}-${arch}.${ext}
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# zip target uses the default artifactName: ${productName}-${version}-${arch}.zip
+# (electron-builder 26 removed the root-level `zip` config block)

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -ioE \"\\(phase ?[0-9]+|阶段 ?[0-9]+|第[一二三四五六七八九十0-9]+阶段|Phase [0-9]+[:：][^\\\\\"\\\\\\\\\\\\\\\\]{0,80}\\)\" /Users/tobbyquinn/.claude/projects/-Users-tobbyquinn-github-OneTools/b86e90da-1178-4a96-bc3e-fea16443a958.jsonl)",
+      "Bash(grep -oE \"\\\\\"Phase [0-9][^\\\\\"]{0,300}\" /Users/tobbyquinn/.claude/projects/-Users-tobbyquinn-github-OneTools/b86e90da-1178-4a96-bc3e-fea16443a958.jsonl)",
+      "Bash(python3 *)",
+      "Bash(node -p \"process.arch\")",
+      "Bash(npm run *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(npm test *)",
+      "Bash(git init *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
+    ]
+  }
+}
