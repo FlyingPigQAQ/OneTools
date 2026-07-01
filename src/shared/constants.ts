@@ -11,6 +11,10 @@ export const IPC = {
   START_SPLIT: 'splitter:start',
   CANCEL_SPLIT: 'splitter:cancel',
 
+  // Markdown → PDF
+  START_MD_PDF: 'mdpdf:start',
+  CANCEL_MD_PDF: 'mdpdf:cancel',
+
   // App info
   GET_APP_VERSION: 'app:getVersion',
   GET_PLATFORM_INFO: 'app:getPlatformInfo',
@@ -32,4 +36,7 @@ export const IPC_EVENTS = {
   SPLIT_PROGRESS: 'splitter:progress',
   SPLIT_COMPLETE: 'splitter:complete',
   SPLIT_ERROR: 'splitter:error',
+  MD_PDF_PROGRESS: 'mdpdf:progress',
+  MD_PDF_COMPLETE: 'mdpdf:complete',
+  MD_PDF_ERROR: 'mdpdf:error',
 } as const;

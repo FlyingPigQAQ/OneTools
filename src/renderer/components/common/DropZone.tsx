@@ -7,6 +7,12 @@ interface DropZoneProps {
   onDrop: (e: React.DragEvent) => void;
   onClick: () => void;
   disabled?: boolean;
+  /** Emoji shown at the top of the zone. Defaults to 📁. */
+  icon?: string;
+  /** Main instruction line. Defaults to the audio-tool wording. */
+  label?: string;
+  /** Format badges shown at the bottom. Defaults to the audio formats. */
+  formats?: string[];
 }
 
 function DropZone({
@@ -16,6 +22,9 @@ function DropZone({
   onDrop,
   onClick,
   disabled,
+  icon = '📁',
+  label = 'Drag & drop audio files here',
+  formats = ['MP3', 'AAC', 'FLAC', 'WAV', 'OGG', 'Opus', 'M4A', 'WMA'],
 }: DropZoneProps) {
   return (
     <div
@@ -25,11 +34,11 @@ function DropZone({
       onDrop={disabled ? undefined : onDrop}
       onClick={disabled ? undefined : onClick}
     >
-      <div className={styles.icon}>📁</div>
-      <p className={styles.text}>Drag &amp; drop audio files here</p>
+      <div className={styles.icon}>{icon}</div>
+      <p className={styles.text}>{label}</p>
       <p className={styles.subtext}>or click to browse</p>
       <div className={styles.formats}>
-        {['MP3', 'AAC', 'FLAC', 'WAV', 'OGG', 'Opus', 'M4A', 'WMA'].map((fmt) => (
+        {formats.map((fmt) => (
           <span key={fmt} className={styles.badge}>{fmt}</span>
         ))}
       </div>

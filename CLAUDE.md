@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OneTools is a macOS desktop utility app built with Electron, React, and TypeScript. It is designed as a **toolset** — each feature is a self-contained "tool" registered in a registry, so new utilities can be added without modifying the app shell. Current tools: an audio format converter and an audio splitter, both powered by FFmpeg.
+OneTools is a macOS desktop utility app built with Electron, React, and TypeScript. It is designed as a **toolset** — each feature is a self-contained "tool" registered in a registry, so new utilities can be added without modifying the app shell. Current tools: an audio format converter and an audio splitter (both powered by FFmpeg), and a Markdown-to-PDF renderer (powered by Electron's bundled Chromium — no external binary).
 
 ## Design Principle: one tool = one responsibility (do not merge tools)
 
@@ -77,6 +77,18 @@ A **separate** tool from conversion (see Design Principle above). Cuts one file 
 ### Format/parameter mapping
 
 `src/shared/audioFormats.ts` is the single definition of supported formats (codec, extension, default bitrate/sample-rate/channels, and flags like `supportsBitrate`/`supportsVbr`). `AudioConverter.appendCodecArgs()` maps each format id to the correct `-c:a` codec and args; `ParameterPanel` in the converter reads the same flags to show/hide the bitrate control (e.g. lossless formats hide bitrate) and to show the VBR toggle for Opus. When adding a format, update this file and the switch in `appendCodecArgs`. The splitter does **not** use this mapping — it stream-copies (`-c copy`) and preserves the source codec.
+
+### Markdown → PDF tool (document render)
+
+A **separate** tool from the audio tools (see Design Principle above). Renders a Markdown document to a styled PDF. Unlike the audio tools it needs **no external binary** — it uses Electron's bundled Chromium via `webContents.printToPDF`.
+
+1. Renderer (`src/renderer/hooks/useMarkdownPdf.ts`) → `window.electronAPI.startMarkdownPdf(job)`.
+2. Main (`src/main/ipc/markdownPdf.ts`) → `src/main/services/markdownPdf.ts`.
+3. `MarkdownPdfConverter.convert()` reads the `.md` file, renders it to a themed HTML document via the **pure, testable** `src/main/utils/markdownRender.ts` (`renderMarkdownDocument` → `marked` with GFM + line breaks, wrapped in `buildHtmlDocument` with light/sepia/dark CSS), loads that HTML into a hidden `BrowserWindow` from a base64 data URL, awaits `did-finish-load`, then calls `webContents.printToPDF` with the user's page-size/orientation/margins and `printBackground: true` (so theme backgrounds survive). The PDF buffer is written via `resolveUniqueOutputPath()` (same `<baseName>.pdf` / ` (1).pdf` conflict rule as the converter).
+4. Progress is coarse (5/20/35/60/85/100 — read → render → load → print → write), sent on its own `MD_PDF_*` IPC channels. Cancel destroys the hidden render window (which rejects `printToPDF`); a `cancelledJobs` set suppresses the resulting error so the job stays `cancelled` rather than flipping to `error`.
+5. Uses its own `MD_PDF_*` IPC channels, `src/renderer/store/markdownPdfStore.ts`, hook `useMarkdownPdf.ts`, and UI under `src/renderer/components/tools/MarkdownPdf/`. `marked` is a runtime dependency (externalized by `externalizeDepsPlugin`, packed into the app by electron-builder).
+
+The shared file-open dialog (`IPC.SELECT_INPUT_FILES`) takes an optional `kind: 'audio' | 'markdown'` argument so the markdown tool gets Markdown filters while audio callers (which pass nothing) are unaffected. Drag-and-drop filtering is generalized similarly: `useFileDrop(onFilesDrop, extensions?)` defaults to the audio extensions. `DropZone` takes optional `icon`/`label`/`formats` props (defaults to the audio wording).
 
 ### Tool registry (extensibility pattern)
 

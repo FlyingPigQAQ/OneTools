@@ -36,3 +36,10 @@ toolRegistry.register({
   icon: 'scissors',
   description: 'Split an audio file into parts by size or duration',
 });
+
+toolRegistry.register({
+  id: 'markdown-pdf',
+  name: 'Markdown to PDF',
+  icon: 'file-text',
+  description: 'Render Markdown documents to styled PDF',
+});

@@ -6,7 +6,14 @@ export interface DroppedFile {
   name: string;
 }
 
-export function useFileDrop(onFilesDrop: (files: DroppedFile[]) => void) {
+/**
+ * @param extensions Extensions (lowercase, no dot) accepted by the drop zone.
+ *   Defaults to the audio tool's set so existing audio callers are unaffected.
+ */
+export function useFileDrop(
+  onFilesDrop: (files: DroppedFile[]) => void,
+  extensions: string[] = SUPPORTED_INPUT_EXTENSIONS
+) {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -33,7 +40,7 @@ export function useFileDrop(onFilesDrop: (files: DroppedFile[]) => void) {
       for (let i = 0; i < items.length; i++) {
         const file = items[i];
         const ext = file.name.split('.').pop()?.toLowerCase() || '';
-        if (SUPPORTED_INPUT_EXTENSIONS.includes(ext)) {
+        if (extensions.includes(ext)) {
           // webUtils.getPathForFile resolves the real absolute path from the
           // dropped File object (replaces the deprecated File.path property).
           const path = window.electronAPI.getPathForFile(file) || file.name;
@@ -48,7 +55,7 @@ export function useFileDrop(onFilesDrop: (files: DroppedFile[]) => void) {
         onFilesDrop(files);
       }
     },
-    [onFilesDrop]
+    [onFilesDrop, extensions]
   );
 
   return {

@@ -93,13 +93,43 @@ export interface ToolDefinition {
 }
 
 /**
+ * Markdown → PDF conversion. A separate tool from the audio tools: it renders a
+ * Markdown document to a styled PDF via Electron's bundled Chromium
+ * (`webContents.printToPDF`), so no external binary (ffmpeg) is involved.
+ */
+export type PdfPageSize = 'A4' | 'Letter' | 'Legal';
+export type PdfOrientation = 'portrait' | 'landscape';
+export type PdfMargin = 'normal' | 'narrow' | 'none';
+export type MarkdownTheme = 'light' | 'sepia' | 'dark';
+
+export interface MarkdownPdfOptions {
+  pageSize: PdfPageSize;
+  orientation: PdfOrientation;
+  margin: PdfMargin;
+  /** Visual theme applied to the rendered HTML before printing. */
+  theme: MarkdownTheme;
+  outputDir: string;
+}
+
+export interface MarkdownPdfJob {
+  id: string;
+  inputPath: string;
+  fileName: string;
+  options: MarkdownPdfOptions;
+  status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';
+  progress: number;
+  error?: string;
+}
+
+/**
  * The renderer-facing API exposed by the preload script via contextBridge.
  * This is the single source of truth for the IPC contract; preload imports
  * it and the renderer consumes it via `window.electronAPI`.
  */
 export interface ElectronAPI {
   // File dialogs
-  selectInputFiles(): Promise<string[]>;
+  /** `kind` selects the open-dialog filter set; defaults to 'audio'. */
+  selectInputFiles(kind?: 'audio' | 'markdown'): Promise<string[]>;
   selectOutputDir(): Promise<string | null>;
 
   // Resolve the real on-disk path for a File object received via drag-and-drop.
@@ -113,12 +143,19 @@ export interface ElectronAPI {
   startSplit(job: SplitJob): Promise<string>;
   cancelSplit(jobId: string): Promise<boolean>;
 
+  // Markdown → PDF (separate tool)
+  startMarkdownPdf(job: MarkdownPdfJob): Promise<string>;
+  cancelMarkdownPdf(jobId: string): Promise<boolean>;
+
   // Event listeners (shared progress channel; complete/error carry jobId).
   onConversionProgress(callback: (data: ProgressData) => void): () => void;
   onConversionComplete(callback: (data: ConversionResult) => void): () => void;
   onConversionError(callback: (data: ConversionResult) => void): () => void;
   onSplitComplete(callback: (data: ConversionResult) => void): () => void;
   onSplitError(callback: (data: ConversionResult) => void): () => void;
+  onMarkdownPdfProgress(callback: (data: ProgressData) => void): () => void;
+  onMarkdownPdfComplete(callback: (data: ConversionResult) => void): () => void;
+  onMarkdownPdfError(callback: (data: ConversionResult) => void): () => void;
 
   // App info
   getAppVersion(): Promise<string>;

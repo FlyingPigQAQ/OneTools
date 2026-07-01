@@ -3,6 +3,7 @@ import { IPC, IPC_EVENTS } from '@shared/constants';
 import type {
   ConversionJob,
   SplitJob,
+  MarkdownPdfJob,
   ProgressData,
   ConversionResult,
   ElectronAPI,
@@ -11,7 +12,8 @@ import type {
 export type { ElectronAPI };
 
 const api: ElectronAPI = {
-  selectInputFiles: () => ipcRenderer.invoke(IPC.SELECT_INPUT_FILES),
+  selectInputFiles: (kind?: 'audio' | 'markdown') =>
+    ipcRenderer.invoke(IPC.SELECT_INPUT_FILES, kind),
   selectOutputDir: () => ipcRenderer.invoke(IPC.SELECT_OUTPUT_DIR),
 
   // Electron deprecated File.path; webUtils.getPathForFile is the replacement.
@@ -22,6 +24,9 @@ const api: ElectronAPI = {
 
   startSplit: (job: SplitJob) => ipcRenderer.invoke(IPC.START_SPLIT, job),
   cancelSplit: (jobId: string) => ipcRenderer.invoke(IPC.CANCEL_SPLIT, jobId),
+
+  startMarkdownPdf: (job: MarkdownPdfJob) => ipcRenderer.invoke(IPC.START_MD_PDF, job),
+  cancelMarkdownPdf: (jobId: string) => ipcRenderer.invoke(IPC.CANCEL_MD_PDF, jobId),
 
   onConversionProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: ProgressData) => callback(data);
@@ -51,6 +56,24 @@ const api: ElectronAPI = {
     const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
     ipcRenderer.on(IPC_EVENTS.SPLIT_ERROR, handler);
     return () => ipcRenderer.removeListener(IPC_EVENTS.SPLIT_ERROR, handler);
+  },
+
+  onMarkdownPdfProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ProgressData) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.MD_PDF_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.MD_PDF_PROGRESS, handler);
+  },
+
+  onMarkdownPdfComplete: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.MD_PDF_COMPLETE, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.MD_PDF_COMPLETE, handler);
+  },
+
+  onMarkdownPdfError: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.MD_PDF_ERROR, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.MD_PDF_ERROR, handler);
   },
 
   getAppVersion: () => ipcRenderer.invoke(IPC.GET_APP_VERSION),

@@ -14,6 +14,12 @@ const TOOLS = [
     icon: '✂️',
     description: 'Split audio into parts by size or duration',
   },
+  {
+    id: 'markdown-pdf',
+    name: 'Markdown to PDF',
+    icon: '📄',
+    description: 'Render Markdown documents to PDF',
+  },
 ];
 
 interface SidebarProps {
