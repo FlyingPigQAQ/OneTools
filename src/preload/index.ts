@@ -6,6 +6,9 @@ import type {
   MarkdownPdfJob,
   ProgressData,
   ConversionResult,
+  RecordingOptions,
+  RecordingTickData,
+  RecordingResult,
   ElectronAPI,
 } from '@shared/types';
 
@@ -74,6 +77,31 @@ const api: ElectronAPI = {
     const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
     ipcRenderer.on(IPC_EVENTS.MD_PDF_ERROR, handler);
     return () => ipcRenderer.removeListener(IPC_EVENTS.MD_PDF_ERROR, handler);
+  },
+
+  // Voice Recorder
+  startRecording: (options: RecordingOptions) => ipcRenderer.invoke(IPC.START_RECORDING, options.outputDir),
+  stopRecording: () => ipcRenderer.invoke(IPC.STOP_RECORDING),
+  getRecordingState: () => ipcRenderer.invoke(IPC.GET_RECORDING_STATE),
+  deleteRecording: (filePath: string) => ipcRenderer.invoke(IPC.DELETE_RECORDING, filePath),
+  readAudioFile: (filePath: string) => ipcRenderer.invoke(IPC.READ_AUDIO_FILE, filePath),
+
+  onRecordingTick: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: RecordingTickData) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.RECORDING_TICK, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.RECORDING_TICK, handler);
+  },
+
+  onRecordingStopped: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: RecordingResult) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.RECORDING_STOPPED, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.RECORDING_STOPPED, handler);
+  },
+
+  onRecordingError: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; error: string }) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.RECORDING_ERROR, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.RECORDING_ERROR, handler);
   },
 
   getAppVersion: () => ipcRenderer.invoke(IPC.GET_APP_VERSION),

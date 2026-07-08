@@ -122,6 +122,52 @@ export interface MarkdownPdfJob {
 }
 
 /**
+ * Voice Recorder tool. Records audio from the default microphone via FFmpeg
+ * (avfoundation on macOS) and saves as MP3. Recording runs in the main process
+ * so it survives tool switches in the renderer.
+ */
+export interface RecordingOptions {
+  outputDir: string;
+  /** Output format extension (e.g. 'mp3'). */
+  format: string;
+}
+
+export interface RecordingState {
+  isRecording: boolean;
+  /** Date.now() timestamp when recording started. */
+  startTime?: number;
+  /** Elapsed seconds since recording started. */
+  elapsedSec: number;
+  /** Output file name (set once recording stops). */
+  outputFileName?: string;
+  /** Unique job identifier. */
+  jobId?: string;
+}
+
+export interface RecordingTickData {
+  jobId: string;
+  elapsedSec: number;
+}
+
+export interface RecordingResult {
+  jobId: string;
+  filePath: string;
+  fileName: string;
+  /** Duration in seconds. */
+  duration: number;
+}
+
+export interface CompletedRecording {
+  id: string;
+  filePath: string;
+  fileName: string;
+  /** Duration in seconds. */
+  duration: number;
+  /** ISO-8601 timestamp of when the recording was created. */
+  createdAt: string;
+}
+
+/**
  * The renderer-facing API exposed by the preload script via contextBridge.
  * This is the single source of truth for the IPC contract; preload imports
  * it and the renderer consumes it via `window.electronAPI`.
@@ -175,4 +221,14 @@ export interface ElectronAPI {
   // these to react to menu/accelerator actions.
   onMenu(channel: string, callback: () => void): void;
   offMenu(channel: string, callback: () => void): void;
+
+  // Voice Recorder (separate tool)
+  startRecording(options: RecordingOptions): Promise<string>;
+  stopRecording(): Promise<RecordingResult>;
+  getRecordingState(): Promise<RecordingState>;
+  deleteRecording(filePath: string): Promise<boolean>;
+  readAudioFile(filePath: string): Promise<Uint8Array>;
+  onRecordingTick(callback: (data: RecordingTickData) => void): () => void;
+  onRecordingStopped(callback: (data: RecordingResult) => void): () => void;
+  onRecordingError(callback: (data: { jobId: string; error: string }) => void): () => void;
 }

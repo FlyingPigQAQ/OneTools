@@ -15,6 +15,12 @@ const TOOLS = [
     description: 'Split audio into parts by size or duration',
   },
   {
+    id: 'voice-recorder',
+    name: 'Voice Recorder',
+    icon: '🎙️',
+    description: 'Record audio from your microphone',
+  },
+  {
     id: 'markdown-pdf',
     name: 'Markdown to PDF',
     icon: '📄',

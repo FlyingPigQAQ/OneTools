@@ -15,6 +15,13 @@ export const IPC = {
   START_MD_PDF: 'mdpdf:start',
   CANCEL_MD_PDF: 'mdpdf:cancel',
 
+  // Voice Recorder
+  START_RECORDING: 'voice-recorder:start',
+  STOP_RECORDING: 'voice-recorder:stop',
+  GET_RECORDING_STATE: 'voice-recorder:getState',
+  DELETE_RECORDING: 'voice-recorder:deleteRecording',
+  READ_AUDIO_FILE: 'voice-recorder:readAudioFile',
+
   // App info
   GET_APP_VERSION: 'app:getVersion',
   GET_PLATFORM_INFO: 'app:getPlatformInfo',
@@ -39,4 +46,7 @@ export const IPC_EVENTS = {
   MD_PDF_PROGRESS: 'mdpdf:progress',
   MD_PDF_COMPLETE: 'mdpdf:complete',
   MD_PDF_ERROR: 'mdpdf:error',
+  RECORDING_TICK: 'voice-recorder:tick',
+  RECORDING_STOPPED: 'voice-recorder:stopped',
+  RECORDING_ERROR: 'voice-recorder:error',
 } as const;
