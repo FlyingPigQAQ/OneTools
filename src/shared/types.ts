@@ -114,6 +114,7 @@ export interface MarkdownPdfOptions {
 export interface MarkdownPdfJob {
   id: string;
   inputPath: string;
+  outputPath?: string;
   fileName: string;
   options: MarkdownPdfOptions;
   status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';

@@ -6,6 +6,7 @@ import FileList from '../../common/FileList';
 import FormatSelector from './FormatSelector';
 import ParameterPanel from './ParameterPanel';
 import ConversionQueue from './ConversionQueue';
+import ToolHeader from '../../common/ToolHeader';
 import styles from './AudioConverter.module.css';
 
 function AudioConverter() {
@@ -98,13 +99,14 @@ function AudioConverter() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h2>Audio Converter</h2>
-        <p>Convert audio files between different formats</p>
-        {ffmpegReady === false && (
-          <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
-        )}
-      </header>
+      <ToolHeader
+        title="Audio Converter"
+        subtitle="Convert audio files between different formats"
+        number="01"
+      />
+      {ffmpegReady === false && (
+        <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
+      )}
 
       <div className={styles.content}>
         <section className={styles.leftPanel}>

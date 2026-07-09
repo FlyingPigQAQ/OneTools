@@ -6,6 +6,7 @@ import DropZone from '../../common/DropZone';
 import FileList from '../../common/FileList';
 import MarkdownPdfQueue from './MarkdownPdfQueue';
 import type { PdfPageSize, PdfOrientation, PdfMargin, MarkdownTheme } from '@shared/types';
+import ToolHeader from '../../common/ToolHeader';
 import styles from './MarkdownPdf.module.css';
 
 const PAGE_SIZES: PdfPageSize[] = ['A4', 'Letter', 'Legal'];
@@ -102,10 +103,11 @@ function MarkdownPdf() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h2>Markdown to PDF</h2>
-        <p>Render Markdown documents to a styled PDF — no external binary required.</p>
-      </header>
+      <ToolHeader
+        title="Markdown to PDF"
+        subtitle="Render Markdown documents to a styled PDF — no external binary required."
+        number="04"
+      />
 
       <div className={styles.content}>
         <section className={styles.leftPanel}>

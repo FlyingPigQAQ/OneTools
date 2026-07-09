@@ -5,6 +5,7 @@ import DropZone from '../../common/DropZone';
 import FileList from '../../common/FileList';
 import SplitQueue from './SplitQueue';
 import type { SplitMode } from '@shared/types';
+import ToolHeader from '../../common/ToolHeader';
 import styles from './AudioSplitter.module.css';
 
 function AudioSplitter() {
@@ -65,13 +66,14 @@ function AudioSplitter() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h2>Audio Splitter</h2>
-        <p>Split an audio file into parts by size or duration — no re-encoding.</p>
-        {ffmpegReady === false && (
-          <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
-        )}
-      </header>
+      <ToolHeader
+        title="Audio Splitter"
+        subtitle="Split an audio file into parts by size or duration — no re-encoding."
+        number="02"
+      />
+      {ffmpegReady === false && (
+        <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
+      )}
 
       <div className={styles.content}>
         <section className={styles.leftPanel}>

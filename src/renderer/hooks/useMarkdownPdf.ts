@@ -24,7 +24,10 @@ export function useMarkdownPdf() {
     });
 
     const removeComplete = window.electronAPI.onMarkdownPdfComplete((data) => {
-      updateJobStatus(data.jobId, 'completed', 100);
+      const outputFileName = data.outputPath
+        ? data.outputPath.split('/').pop() || data.outputPath
+        : undefined;
+      updateJobStatus(data.jobId, 'completed', 100, undefined, outputFileName, data.outputPath);
     });
 
     const removeError = window.electronAPI.onMarkdownPdfError((data) => {
@@ -105,13 +108,17 @@ export function useMarkdownPdf() {
     [updateJobStatus]
   );
 
-  /** Reveal a job's output folder in Finder. */
+  /** Reveal a job's output PDF in Finder. */
   const revealInFinder = useCallback(async (jobId: string) => {
     const job = useMarkdownPdfStore.getState().jobs.find((j) => j.id === jobId);
     if (!job) return;
-    const dir = job.options.outputDir || job.inputPath.substring(0, job.inputPath.lastIndexOf('/'));
-    if (dir) {
-      await window.electronAPI.revealInFinder(dir);
+    if (job.outputPath) {
+      await window.electronAPI.showItemInFolder(job.outputPath);
+    } else {
+      const dir = job.options.outputDir || job.inputPath.substring(0, job.inputPath.lastIndexOf('/'));
+      if (dir) {
+        await window.electronAPI.revealInFinder(dir);
+      }
     }
   }, []);
 

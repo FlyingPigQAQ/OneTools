@@ -10,7 +10,9 @@ interface MarkdownPdfState {
     jobId: string,
     status: MarkdownPdfJob['status'],
     progress?: number,
-    error?: string
+    error?: string,
+    fileName?: string,
+    outputPath?: string
   ) => void;
 }
 
@@ -24,7 +26,7 @@ export const useMarkdownPdfStore = create<MarkdownPdfState>((set) => ({
 
   clearJobs: () => set({ jobs: [] }),
 
-  updateJobStatus: (jobId, status, progress, error) =>
+  updateJobStatus: (jobId, status, progress, error, fileName, outputPath) =>
     set((state) => ({
       jobs: state.jobs.map((job) =>
         job.id === jobId
@@ -33,6 +35,8 @@ export const useMarkdownPdfStore = create<MarkdownPdfState>((set) => ({
               status,
               ...(progress !== undefined && { progress }),
               ...(error !== undefined && { error }),
+              ...(fileName !== undefined && { fileName }),
+              ...(outputPath !== undefined && { outputPath }),
             }
           : job
       ),

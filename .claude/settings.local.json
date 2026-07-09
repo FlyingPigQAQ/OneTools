@@ -11,7 +11,10 @@
       "Bash(npm test *)",
       "Bash(git init *)",
       "Bash(git remote *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(node -e \"console.log\\('marked:', require\\('marked'\\).parse\\('# hi'\\).trim\\(\\)\\)\")"
     ]
   }
 }

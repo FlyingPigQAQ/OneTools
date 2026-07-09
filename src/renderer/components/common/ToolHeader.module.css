@@ -1,0 +1,68 @@
+/* ── Bleed headline header ── */
+.header {
+  padding: var(--spacing-lg) var(--spacing-lg) 0;
+  margin-bottom: var(--spacing-lg);
+  overflow: visible;
+}
+
+/* ── Bleed container ── */
+.bleedContainer {
+  position: relative;
+  margin-left: -2vw;
+  margin-bottom: var(--spacing-sm);
+  overflow: visible;
+}
+
+.bleedTitle {
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 900;
+  color: var(--color-text-primary);
+  line-height: 0.95;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
+  mix-blend-mode: multiply;
+  word-break: break-word;
+}
+
+/* Noise overlay on the headline */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background-repeat: repeat;
+  mix-blend-mode: multiply;
+}
+
+/* ── Meta line ── */
+.meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.number {
+  font-family: var(--font-display);
+  font-size: var(--font-size-h3);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.subtitle {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* ── Hairline rule ── */
+.rule {
+  height: 1px;
+  background-color: var(--color-text-primary);
+  opacity: 0.15;
+  width: 100%;
+}

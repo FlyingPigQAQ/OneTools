@@ -1,37 +1,26 @@
 .container {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
+  padding: 0 var(--spacing-lg) var(--spacing-xl);
 }
 
-.header {
-  margin-bottom: var(--spacing-lg);
-}
-
-.header h2 {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text-inverse);
-  margin-bottom: var(--spacing-xs);
-}
-
-.header p {
-  color: var(--color-text-secondary);
-  margin-bottom: var(--spacing-sm);
-}
-
+/* ── Warning ── */
 .warning {
-  background-color: rgba(206, 145, 120, 0.15);
+  background-color: rgba(199, 81, 46, 0.08);
   border: 1px solid var(--color-warning);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: var(--spacing-sm) var(--spacing-md);
   color: var(--color-warning);
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  margin-top: var(--spacing-sm);
 }
 
+/* ── Two-column content ── */
 .content {
   display: grid;
-  grid-template-columns: 1fr 320px;
-  gap: var(--spacing-lg);
+  grid-template-columns: 1fr 300px;
+  gap: var(--spacing-xl);
   margin-bottom: var(--spacing-lg);
 }
 
@@ -51,21 +40,25 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  padding-top: var(--spacing-xs);
 }
 
+/* ── Panel ── */
 .panel {
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: var(--spacing-md);
 }
 
 .sectionLabel {
   display: block;
+  font-family: var(--font-display);
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--color-text-primary);
   margin-bottom: var(--spacing-md);
+  letter-spacing: -0.01em;
 }
 
 .modeRow {
@@ -78,22 +71,23 @@
   flex: 1;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-tertiary);
+  border-radius: 0;
+  background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  transition: all 0.15s ease;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
   cursor: pointer;
 }
 
 .modeBtn:hover {
-  border-color: var(--color-accent);
+  border-color: var(--color-text-primary);
 }
 
 .modeBtn.active {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
 }
 
 .group {
@@ -106,8 +100,11 @@
 
 .label {
   display: block;
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: var(--spacing-xs);
 }
 
@@ -121,41 +118,49 @@
   width: 100px;
   padding: 6px 8px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background-color: var(--color-bg-tertiary);
+  border-radius: 0;
+  background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
 }
 
 .numberInput:focus {
   outline: none;
-  border-color: var(--color-accent);
+  border-color: var(--color-text-primary);
 }
 
 .unit {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
   color: var(--color-text-secondary);
 }
 
 .hint {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
   margin-top: var(--spacing-xs);
 }
 
+/* ── Output directory ── */
 .outputSection {
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: var(--spacing-md);
 }
 
 .outputSection label {
   display: block;
-  font-size: var(--font-size-sm);
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
   color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   margin-bottom: var(--spacing-sm);
 }
 
@@ -167,55 +172,67 @@
 
 .dirPath {
   flex: 1;
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
   color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   background-color: var(--color-bg-tertiary);
   padding: var(--spacing-sm);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
 }
 
 .outputDir button {
   padding: var(--spacing-sm) var(--spacing-md);
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-text-primary);
+  border-radius: 0;
   color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  transition: all 0.15s;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .outputDir button:hover {
-  border-color: var(--color-accent);
-  background-color: var(--color-bg-hover);
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
 }
 
+/* ── Split button ── */
 .splitBtn {
   width: 100%;
   padding: var(--spacing-md);
-  background-color: var(--color-accent);
-  border-radius: var(--radius-md);
-  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  border-radius: 0;
+  color: var(--color-bg-primary);
+  font-family: var(--font-display);
   font-size: var(--font-size-lg);
-  font-weight: 600;
-  transition: background-color 0.15s;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transition: background-color 0.2s, opacity 0.2s;
 }
 
 .splitBtn:hover:not(:disabled) {
-  background-color: var(--color-accent-hover);
+  background-color: var(--color-accent);
+  color: var(--color-text-inverse);
 }
 
 .splitBtn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* ── Empty hint ── */
 .emptyHint {
   text-align: center;
-  font-size: var(--font-size-sm);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: var(--font-size-body);
   color: var(--color-text-secondary);
   padding: var(--spacing-md);
-  font-style: italic;
 }

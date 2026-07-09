@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useVoiceRecorder } from '../../../hooks/useVoiceRecorder';
 import RecordingList from './RecordingList';
+import ToolHeader from '../../common/ToolHeader';
 import styles from './VoiceRecorder.module.css';
 
 function VoiceRecorder() {
@@ -29,10 +30,11 @@ function VoiceRecorder() {
 
   return (
     <div className={styles.container}>
-      <header className={styles.header}>
-        <h2>Voice Recorder</h2>
-        <p>Record audio from your microphone and save as MP3.</p>
-      </header>
+      <ToolHeader
+        title="Voice Recorder"
+        subtitle="Record audio from your microphone and save as MP3."
+        number="03"
+      />
 
       <div className={styles.content}>
         {/* Left Panel: Recording Controls */}
@@ -71,7 +73,7 @@ function VoiceRecorder() {
             )}
 
             {!isRecording && !outputDir && (
-              <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+              <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-caption)' }}>
                 Select an output directory to start recording.
               </p>
             )}

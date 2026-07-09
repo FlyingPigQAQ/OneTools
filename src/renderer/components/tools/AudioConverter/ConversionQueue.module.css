@@ -2,7 +2,7 @@
   margin-top: var(--spacing-lg);
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 0;
   padding: var(--spacing-md);
 }
 
@@ -11,31 +11,45 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .title {
+  font-family: var(--font-display);
   font-size: var(--font-size-md);
   font-weight: 600;
   color: var(--color-text-primary);
+  letter-spacing: -0.01em;
 }
 
 .clearBtn {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   color: var(--color-accent);
   padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-sm);
-  transition: background-color 0.15s;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  transition: background-color 0.2s;
 }
 
 .clearBtn:hover {
   background-color: var(--color-bg-hover);
 }
 
+.summary {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+  font-weight: 400;
+}
+
 .list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-sm);
 }
 
 .item {
@@ -44,7 +58,7 @@
   gap: var(--spacing-xs);
   padding: var(--spacing-sm);
   background-color: var(--color-bg-tertiary);
-  border-radius: var(--radius-sm);
+  border-radius: 0;
 }
 
 .info {
@@ -54,7 +68,8 @@
 }
 
 .fileName {
-  font-size: var(--font-size-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -62,10 +77,12 @@
 }
 
 .status {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  text-transform: capitalize;
+  border-radius: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   font-weight: 500;
 }
 
@@ -75,17 +92,17 @@
 }
 
 .status.converting {
-  background-color: var(--color-bg-active);
-  color: var(--color-text-inverse);
+  background-color: var(--color-text-primary);
+  color: var(--color-bg-primary);
 }
 
 .status.completed {
-  background-color: rgba(78, 201, 176, 0.2);
+  background-color: rgba(46, 125, 50, 0.12);
   color: var(--color-success);
 }
 
 .status.error {
-  background-color: rgba(244, 71, 71, 0.2);
+  background-color: rgba(139, 26, 26, 0.1);
   color: var(--color-error);
 }
 
@@ -101,50 +118,48 @@
 }
 
 .cancelBtn {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  transition: all 0.15s;
+  border-radius: 0;
+  transition: color 0.15s, background-color 0.15s;
 }
 
 .cancelBtn:hover {
   color: var(--color-error);
-  background-color: rgba(244, 71, 71, 0.1);
+  background-color: rgba(139, 26, 26, 0.08);
 }
 
 .retryBtn {
-  font-size: var(--font-size-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
   color: var(--color-text-secondary);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  transition: all 0.15s;
+  border-radius: 0;
+  transition: color 0.15s, background-color 0.15s;
 }
 
 .retryBtn:hover {
   color: var(--color-accent);
-  background-color: rgba(0, 122, 204, 0.1);
+  background-color: rgba(199, 81, 46, 0.08);
 }
 
 .revealBtn {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  transition: all 0.15s;
+  border-radius: 0;
+  transition: background-color 0.15s;
 }
 
 .revealBtn:hover {
   background-color: var(--color-bg-hover);
 }
 
-.summary {
-  font-size: var(--font-size-sm);
-  font-weight: 400;
-  color: var(--color-text-secondary);
-}
-
 .error {
-  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
   color: var(--color-error);
   margin-top: var(--spacing-xs);
 }
