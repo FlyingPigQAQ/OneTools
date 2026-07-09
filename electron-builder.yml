@@ -8,7 +8,6 @@ directories:
 
 files:
   - "out/**/*"
-  - "!node_modules"
   - "!src"
   - "!scripts"
   - "!*.config.ts"
@@ -30,6 +29,8 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   icon: resources/icon.icns
   gatekeeperAssess: false
+  identity:  "yao qi (A3LQYCQRTS)"
+  notarize: true
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
@@ -40,6 +41,7 @@ dmg:
       y: 220
       type: link
       path: /Applications
-
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
 # zip target uses the default artifactName: ${productName}-${version}-${arch}.zip
 # (electron-builder 26 removed the root-level `zip` config block)
