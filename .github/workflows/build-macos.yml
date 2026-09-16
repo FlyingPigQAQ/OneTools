@@ -4,8 +4,9 @@
 # APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER
 #
 # Push to a branch: unit tests + electron-vite compile only (~1 min).
-# Push a v* tag to package a signed + notarized universal .dmg and
-# publish it as a GitHub Release named after the tag (e.g. v0.1.0).
+# Push to main: also compare package.json version with the latest GitHub
+# Release. If it is greater, package a signed + notarized universal .dmg
+# and publish it as v<version>.
 #
 # electron-builder imports CSC_LINK into a temporary keychain, signs with
 # Hardened Runtime, then notarizes via notarytool (App Store Connect API key).
@@ -16,8 +17,6 @@ on:
   push:
     branches:
       - '**'
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
@@ -29,13 +28,10 @@ concurrency:
 env:
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
   ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-  # Universal + Apple notarization is ~7 min. Only spend that on a release
-  # tag, not on every branch push.
-  PACKAGE: ${{ startsWith(github.ref, 'refs/tags/v') }}
 
 jobs:
   macos:
-    name: ${{ startsWith(github.ref, 'refs/tags/v') && 'Package macOS app' || 'Test' }}
+    name: ${{ github.ref == 'refs/heads/main' && 'Test / maybe package' || 'Test' }}
     runs-on: macos-26
     timeout-minutes: 90
 
@@ -68,8 +64,79 @@ jobs:
           test -f out/preload/index.js
           test -f out/renderer/index.html
 
+      - name: Check package.json version
+        if: github.ref == 'refs/heads/main'
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          node <<'EOF'
+          const fs = require('node:fs')
+          const { execFileSync } = require('node:child_process')
+
+          const current = JSON.parse(fs.readFileSync('package.json', 'utf8')).version
+
+          function parse(v) {
+            const m = String(v)
+              .replace(/^v/, '')
+              .match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/)
+            if (!m) return null
+            return { core: [Number(m[1]), Number(m[2]), Number(m[3])], pre: m[4] || '' }
+          }
+
+          function cmp(a, b) {
+            for (let i = 0; i < 3; i++) {
+              if (a.core[i] !== b.core[i]) return a.core[i] - b.core[i]
+            }
+            if (!a.pre && b.pre) return 1
+            if (a.pre && !b.pre) return -1
+            if (a.pre === b.pre) return 0
+            return a.pre < b.pre ? -1 : 1
+          }
+
+          const cur = parse(current)
+          if (!cur) {
+            console.error(`::error::invalid package.json version '${current}'`)
+            process.exit(1)
+          }
+
+          let releases = []
+          try {
+            const raw = execFileSync(
+              'gh',
+              ['release', 'list', '--limit', '100', '--json', 'tagName'],
+              { encoding: 'utf8' }
+            )
+            releases = JSON.parse(raw)
+          } catch (err) {
+            console.error('::error::failed to list GitHub Releases')
+            console.error(err.stderr || err.message)
+            process.exit(1)
+          }
+
+          const versions = releases.map((r) => parse(r.tagName)).filter(Boolean)
+          const latest = versions.sort(cmp).at(-1)
+          const latestStr = latest
+            ? `${latest.core.join('.')}${latest.pre ? `-${latest.pre}` : ''}`
+            : ''
+          const shouldRelease = !latest || cmp(cur, latest) > 0
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${current}\n`)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=v${current}\n`)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `should_release=${shouldRelease}\n`)
+
+          if (shouldRelease) {
+            console.log(`publishing v${current} (latest release: ${latestStr || 'none'})`)
+          } else {
+            console.log(
+              `::notice::skip release: package.json ${current} is not greater than ${latestStr}`
+            )
+          }
+          EOF
+
       - name: Cache Electron downloads
-        if: env.PACKAGE == 'true'
+        if: steps.version.outputs.should_release == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -78,24 +145,11 @@ jobs:
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Fetch static FFmpeg binaries
-        if: env.PACKAGE == 'true'
+        if: steps.version.outputs.should_release == 'true'
         run: ./scripts/fetch-ffmpeg-macos.sh
 
-      - name: Resolve version
-        if: env.PACKAGE == 'true'
-        id: version
-        run: |
-          set -euo pipefail
-          VER="${GITHUB_REF_NAME#v}"
-          if [[ ! "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
-            echo "::error::invalid tag '$GITHUB_REF_NAME' (expected e.g. v0.1.0)"
-            exit 1
-          fi
-          echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${VER}" >> "$GITHUB_OUTPUT"
-
       - name: Build, sign, and notarize
-        if: env.PACKAGE == 'true'
+        if: steps.version.outputs.should_release == 'true'
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -115,7 +169,7 @@ jobs:
             -c.extraMetadata.version="${{ steps.version.outputs.version }}"
 
       - name: Verify artifacts
-        if: env.PACKAGE == 'true'
+        if: steps.version.outputs.should_release == 'true'
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -139,7 +193,7 @@ jobs:
           done
 
       - uses: actions/upload-artifact@v4
-        if: env.PACKAGE == 'true'
+        if: steps.version.outputs.should_release == 'true'
         with:
           name: OneTools-macos-${{ github.run_id }}
           path: |
@@ -148,11 +202,12 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.version.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.version.outputs.tag }}
           tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
             dist/*.dmg
