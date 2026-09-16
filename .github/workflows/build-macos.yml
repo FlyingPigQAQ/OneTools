@@ -1,33 +1,41 @@
 # Build, sign, notarize and publish the OneTools macOS app on GitHub-hosted runners.
 #
 # Triggers
-#   - push of a `v*` tag  -> full signed build + GitHub Release
-#   - workflow_dispatch   -> manual run, signed by default (can be turned off)
+#   - push of a `v*` tag  -> signed + notarized build, published as a GitHub Release
+#   - push to other refs  -> signed + notarized build, artifacts only (no Release)
+#   - workflow_dispatch   -> manual run, same as above
+#
+# SIGNING IS MANDATORY. Every run must produce a signed + notarized app; there is
+# no "unsigned fallback" path. If the secrets below are missing, the workflow
+# resolves them in the very first job and stops there — the build never starts,
+# nothing unsigned is ever produced.
 #
 # Required repository secrets (Settings > Secrets and variables > Actions):
 #   MAC_CSC_LINK                    base64 (.p12, `base64 -i cert.p12`) or an https URL
-#                                   of the "Developer ID Application" certificate
+#                                   of the "Developer ID Application" certificate.
+#                                   Imported into a dedicated keychain (macOS runners have
+#                                   none unlocked for codesign); also re-imported into
+#                                   electron-builder's own keychain so that @electron/notarize
+#                                   can find the signing identity.
 #   MAC_CSC_KEY_PASSWORD            password of that .p12
 #   KEYCHAIN_PASSWORD               any random string; password of the temporary keychain
 #   APPLE_ID                        Apple ID used for notarization
 #   APPLE_APP_SPECIFIC_PASSWORD     app-specific password for that Apple ID
 #   APPLE_TEAM_ID                   10-char Apple Developer Team ID
 #
-# Without the secrets above the workflow still builds, but produces an
-# UNSIGNED app (it prints a warning instead of failing).
+# Local (unsigned) builds are still possible with `npm run build:mac` — the
+# local path is unaffected by this workflow.
 
 name: Build macOS
 
 on:
   push:
+    branches:
+      - '**'
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
-      sign:
-        description: 'Sign + notarize (needs MAC_* / APPLE_* secrets)'
-        type: boolean
-        default: true
       create_release:
         description: 'Publish artifacts to a GitHub Release'
         type: boolean
@@ -38,17 +46,59 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   # Keep the Electron / electron-builder binaries on the fast mirror used by
   # this project (see electron-builder.yml: electronDownload.mirror).
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
   ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+  # Signing is mandatory; never let electron-builder silently fall back to an
+  # unsigned build when the identity cannot be resolved. The Developer ID
+  # certificate is imported into a temporary keychain before the build.
+  CSC_IDENTITY_AUTO_DISCOVERY: 'true'
+  CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
 
 jobs:
+  # Gate job: resolve the signing/notarization secrets on a cheap Linux runner.
+  # A missing secret fails the whole run here, before any macOS minutes (or any
+  # unsigned artifact) can be produced.
+  secrets:
+    name: Check signing secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_signing: ${{ steps.check.outputs.has_signing }}
+    steps:
+      - name: Require signing + notarization secrets
+        id: check
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "${MAC_CSC_LINK:-}" ]                || missing="$missing MAC_CSC_LINK"
+          [ -n "${MAC_CSC_KEY_PASSWORD:-}" ]        || missing="$missing MAC_CSC_KEY_PASSWORD"
+          [ -n "${KEYCHAIN_PASSWORD:-}" ]           || missing="$missing KEYCHAIN_PASSWORD"
+          [ -n "${APPLE_ID:-}" ]                    || missing="$missing APPLE_ID"
+          [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || missing="$missing APPLE_APP_SPECIFIC_PASSWORD"
+          [ -n "${APPLE_TEAM_ID:-}" ]               || missing="$missing APPLE_TEAM_ID"
+          if [ -n "$missing" ]; then
+            echo "::error title=Signing secrets not configured::OneTools requires every release to be signed and notarized. Missing repository secrets:${missing}. Add them under Settings > Secrets and variables > Actions, then re-run this workflow."
+            exit 1
+          fi
+          echo "has_signing=true" >> "$GITHUB_OUTPUT"
+          echo "All signing + notarization secrets are present."
+
   macos:
     name: Package macOS app
+    needs: secrets
+    if: needs.secrets.outputs.has_signing == 'true'
     runs-on: macos-14
     timeout-minutes: 90
 
@@ -62,44 +112,6 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: package-lock.json
-
-      - name: Decide whether signing is possible
-        id: sign
-        env:
-          WANT_SIGN: ${{ github.event_name == 'push' && 'true' || inputs.sign }}
-          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          missing=""
-          [ -n "${MAC_CSC_LINK:-}" ]              || missing="$missing MAC_CSC_LINK"
-          [ -n "${MAC_CSC_KEY_PASSWORD:-}" ]      || missing="$missing MAC_CSC_KEY_PASSWORD"
-          [ -n "${APPLE_ID:-}" ]                  || missing="$missing APPLE_ID"
-          [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || missing="$missing APPLE_APP_SPECIFIC_PASSWORD"
-          [ -n "${APPLE_TEAM_ID:-}" ]             || missing="$missing APPLE_TEAM_ID"
-          if [ "${WANT_SIGN:-true}" = "true" ] && [ -z "$missing" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            # CSC_NAME + CSC_LINK drive signing; make sure auto-discovery does
-            # not short-circuit on the certificate name in electron-builder.yml.
-            echo "CSC_IDENTITY_AUTO_DISCOVERY=true" >> "$GITHUB_ENV"
-            echo "Signing + notarization ENABLED."
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            # No certificate: skip signing AND notarization entirely instead of
-            # failing on a missing identity. electron-builder.yml sets
-            # `mac.notarize: true`; the only way to turn it off from the outside
-            # is CSC_IDENTITY_AUTO_DISCOVERY=false plus an empty team id, so we
-            # also hand electron-builder a generated override config below.
-            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
-            echo "::warning::Signing disabled — missing secrets:${missing:- (signing turned off manually)}. Building an unsigned app."
-            # Generated override config (heredocs cannot be nested inside a
-            # YAML block scalar, so the lines are written with printf).
-            printf 'mac:\n  identity: null\n  notarize: false\n' > "$RUNNER_TEMP/unsigned-override.yml"
-            cat "$RUNNER_TEMP/unsigned-override.yml"
-          fi
 
       - name: Install dependencies
         # `npm ci` also triggers this project's postinstall
@@ -121,21 +133,51 @@ jobs:
       - name: Prepare FFmpeg binaries
         # The app resolves the binary at Resources/ffmpeg/<process.arch>/ffmpeg,
         # so each .app must ship the binary matching its own architecture.
-        # See scripts/fetch-ffmpeg-ci.sh for why a Homebrew ffmpeg does not work here.
+        # It must also be self-contained (static): a Homebrew ffmpeg links dylibs
+        # from /opt/homebrew, which are neither present on the runner nor signed,
+        # so notarization would fail. This step is a hard gate, not a warning.
         run: |
           set -eux
           chmod +x resources/ffmpeg/*/ffmpeg
-          ls -la resources/ffmpeg/*/ffmpeg
+          # The universal .app resolves both Resources/ffmpeg/arm64 and
+          # Resources/ffmpeg/x64 at runtime, and a signed bundle must not contain
+          # an unsigned/foreign Mach-O. Normalize to one binary per arch and make
+          # sure the arm64 build (the only one committed today) also carries x86_64
+          # — otherwise either install one universal binary or add
+          # resources/ffmpeg/x64/ffmpeg (see README "FFmpeg binary").
+          if [ -x resources/ffmpeg/arm64/ffmpeg ] && [ ! -x resources/ffmpeg/x64/ffmpeg ]; then
+            if lipo -archs resources/ffmpeg/arm64/ffmpeg | grep -qw x86_64; then
+              mkdir -p resources/ffmpeg/x64
+              cp resources/ffmpeg/arm64/ffmpeg resources/ffmpeg/x64/ffmpeg
+            else
+              echo "::error title=Missing x64 FFmpeg::resources/ffmpeg/arm64/ffmpeg is arm64-only and resources/ffmpeg/x64/ffmpeg does not exist, so an Intel/universal package would ship without FFmpeg. Commit a universal or x64 static binary."
+              exit 1
+            fi
+          fi
           for bin in resources/ffmpeg/*/ffmpeg; do
             echo "== $bin"
-            # A non-static binary references Homebrew/Absolute paths -> not notarizable.
-            if otool -L "$bin" | tail -n +2 | grep -q '^[[:space:]]*[^[:space:]]*/'; then
-              echo "::warning::$bin is dynamically linked ($(otool -L "$bin" | tail -n +2 | wc -l | tr -d ' ') deps). It must be self-contained (static) or signed as a nested binary, otherwise notarization fails."
+            otool -L "$bin"
+            archs=$(lipo -archs "$bin")
+            echo "arch: $archs"
+            case "$bin" in
+              */arm64/*) echo "$archs" | grep -qw arm64  || { echo "::error::$bin is not an arm64 binary"; exit 1; } ;;
+              */x64/*)   echo "$archs" | grep -qw x86_64 || { echo "::error::$bin is not an x86_64 binary"; exit 1; } ;;
+            esac
+            # A non-static binary references Homebrew/absolute paths: those
+            # dylibs are not on the runner and not hardened, so notarization
+            # would fail. Hard error, not a warning.
+            deps=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' | grep -v '^/usr/lib/' | grep -v '^/System/' || true)
+            if [ -n "$deps" ]; then
+              echo "::error title=Dynamically linked FFmpeg::$bin links libraries outside /usr/lib and /System ($deps). Replace it with a self-contained static build — a Homebrew build cannot pass notarization."
+              exit 1
             fi
           done
 
       - name: Import signing certificate
-        if: steps.sign.outputs.enabled == 'true'
+        # Used to (a) prove the .p12 really contains a Developer ID Application
+        # identity before the expensive build, and (b) let the verification steps
+        # run codesign. electron-builder imports the same certificate into its own
+        # throwaway keychain so @electron/notarize can look the identity up too.
         env:
           MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -143,8 +185,8 @@ jobs:
         run: |
           set -euo pipefail
           # macOS runners have no keychain unlocked for codesign, so import the
-          # .p12 into a dedicated temporary keychain and tell electron-builder
-          # (via CSC_KEYCHAIN) to use it.
+          # .p12 into a dedicated temporary keychain. CSC_KEYCHAIN also points
+          # electron-builder at it for the identity lookup.
           KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
           KEYCHAIN_PW="${KEYCHAIN_PASSWORD:-$(openssl rand -hex 16)}"
           CERT_PATH="$RUNNER_TEMP/cert.p12"
@@ -166,10 +208,13 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
 
           rm -f "$CERT_PATH"
-          echo "CSC_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
+          # CSC_KEYCHAIN is set job-wide; export the link/password so
+          # electron-builder can re-import the certificate into its own keychain,
+          # which is what @electron/notarize looks the identity up in.
+          echo "CSC_LINK=$MAC_CSC_LINK" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$MAC_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Verify signing identity
-        if: steps.sign.outputs.enabled == 'true'
+      - name: Resolve signing identity
         id: identity
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -184,61 +229,61 @@ jobs:
           ID=$(printf '%s\n' "$ALL" | grep -F "($APPLE_TEAM_ID)" | head -1)
           [ -n "$ID" ] || ID=$(printf '%s\n' "$ALL" | head -1)
           if [ -z "$ID" ]; then
-            echo "::error::no 'Developer ID Application' identity in the keychain — MAC_CSC_LINK must contain a Developer ID Application certificate, not an Apple Development one."
+            echo "::error title=No Developer ID Application identity::the keychain imported from MAC_CSC_LINK contains no 'Developer ID Application' certificate (an Apple Development certificate cannot sign a distributable app)."
             exit 1
           fi
           echo "identity=$ID" >> "$GITHUB_OUTPUT"
           echo "Using identity: $ID"
 
-      - name: Build + package macOS app
-        # `electron-builder --mac` runs the project's own `build` script first
-        # (electron-vite build), then packages and signs.
-        # --universal produces one .app/.dmg for both architectures.
+      - name: Notarization credentials
+        run: |
+          set -euo pipefail
+          echo "APPLE_ID=${{ secrets.APPLE_ID }}" >> "$GITHUB_ENV"
+          echo "APPLE_APP_SPECIFIC_PASSWORD=${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}" >> "$GITHUB_ENV"
+
+      - name: Build + sign + notarize macOS app
+        # `electron-builder --mac --universal` runs the project's own `build`
+        # script first (electron-vite build), then packages, signs with Hardened
+        # Runtime and submits the .app to Apple's notary service.
+        # `--config.forceCodeSigning=true` makes electron-builder itself fail if
+        # no identity is available, so an unsigned build cannot slip through.
         env:
-          CSC_LINK: ${{ steps.sign.outputs.enabled == 'true' && secrets.MAC_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ steps.sign.outputs.enabled == 'true' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ steps.sign.outputs.enabled == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ steps.sign.outputs.enabled == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ steps.sign.outputs.enabled == 'true' && secrets.APPLE_TEAM_ID || '' }}
-          # Passed to electron-builder.yml via `mac.identity`.
+          # Identity comes from the temporary keychain, not electron-builder.yml.
           CSC_NAME: ${{ steps.identity.outputs.identity }}
         run: |
           set -euo pipefail
-          ARGS=(--mac --universal --publish never)
-          # In the unsigned path, override `mac.identity` / `mac.notarize` from
-          # electron-builder.yml (electron-builder deep-merges --config) so the
-          # build does not fail on a missing certificate.
-          if [ "${{ steps.sign.outputs.enabled }}" != "true" ] && [ -f "$RUNNER_TEMP/unsigned-override.yml" ]; then
-            ARGS+=(--config "$RUNNER_TEMP/unsigned-override.yml")
-          fi
-          npx electron-builder "${ARGS[@]}"
+          test -n "${CSC_NAME:-}"
+          npx electron-builder --mac --universal --publish never \
+            --config.forceCodeSigning=true
 
       - name: Verify signature
-        if: steps.sign.outputs.enabled == 'true'
         run: |
           set -eux
+          # Every binary in a notarized bundle must carry a valid signature.
           APP=$(ls -d dist/mac*/OneTools.app | head -1)
           echo "== verifying $APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier|Identifier'
-          # Every nested Mach-O must be signed correctly or notarization breaks.
+          # A signed .app must not contain unsigned nested Mach-O binaries.
           for bin in "$APP"/Contents/Resources/ffmpeg/*/ffmpeg; do
             [ -e "$bin" ] || continue
             echo "== $bin"
             codesign --verify --strict --verbose=2 "$bin"
           done
           echo "== dmg =="
-          codesign --verify --verbose=2 dist/*.dmg || true
+          codesign --verify --verbose=2 dist/*.dmg
 
       - name: Verify notarization
-        if: steps.sign.outputs.enabled == 'true'
         run: |
           set -eux
-          # The .app was notarized as part of the dmg/zip creation; confirm stapling.
+          # The .app is notarized as part of the dmg/zip creation; confirm stapling.
           for f in dist/*.dmg; do
-            xcrun stapler validate "$f" && echo "stapled: $f"
+            xcrun stapler validate "$f"
+            echo "stapled: $f"
           done
-          spctl -a -vvv -t install dist/mac*/OneTools.app || true
+          # Gatekeeper must accept the app for distribution.
+          spctl -a -vvv -t exec "$(ls -d dist/mac*/OneTools.app | head -1)"
 
       - name: Verify artifacts
         run: |
@@ -266,12 +311,11 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
-            dist/latest*.yml
           if-no-files-found: error
           retention-days: 14
 
       - name: Publish GitHub Release
-        if: ${{ github.event_name == 'push' || inputs.create_release }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.create_release }}
         uses: softprops/action-gh-release@v2
         with:
           name: OneTools ${{ github.ref_name }}
@@ -281,6 +325,5 @@ jobs:
           files: |
             dist/*.dmg
             dist/*.zip
-            dist/latest*.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

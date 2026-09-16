@@ -16,8 +16,8 @@ files:
 extraResources:
   - from: resources/ffmpeg
     to: ffmpeg
-    # Only ship the binary that matches the target arch: a notarized build must
-    # not contain foreign-arch Mach-O files (and x64/ may be empty).
+    # Only ship the binary that matches the target arch: a signed/notarized
+    # build must not contain a foreign-arch Mach-O.
     filter:
       - "${arch}/**/*"
 
@@ -31,14 +31,19 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   icon: resources/icon.icns
   gatekeeperAssess: false
-  # Identity is resolved at build time:
-  #   - locally / in CI with a certificate: electron-builder reads CSC_NAME,
-  #     CSC_LINK + CSC_KEY_PASSWORD (see .github/workflows/build-macos.yml).
-  #   - without a certificate: CSC_IDENTITY_AUTO_DISCOVERY=false skips signing
-  #     entirely, so an unsigned build never fails on a missing identity.
-  # Never hardcode a developer name here — it overrides CI values and breaks
-  # reproducible builds.
+  # The signing identity is NEVER hardcoded here. It is resolved at build time
+  # from the environment: CSC_NAME / CSC_LINK / CSC_KEY_PASSWORD / CSC_KEYCHAIN
+  # (see .github/workflows/build-macos.yml, which imports the Developer ID
+  # certificate into a temporary keychain).
+  # Signing is mandatory: release builds pass --config.forceCodeSigning=true,
+  # so a missing identity fails the build instead of producing an unsigned app.
+  # `notarize: true` submits the .app to Apple's notary service using
+  # APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID. It is only attempted
+  # when CSC_LINK is set (electron-builder imports the .p12 into its own keychain
+  # first, which is where the identity used for notarization is looked up).
   notarize: true
+  # Fail the build rather than fall back to an unsigned app.
+  forceCodeSigning: true
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
