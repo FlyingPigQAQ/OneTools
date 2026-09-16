@@ -104,8 +104,9 @@ jobs:
           }
           codesign --verify --deep --strict --verbose=2 "$APP"
           xcrun stapler validate "$APP"
-          codesign --verify --verbose=2 "${dmg[0]}"
-          xcrun stapler validate "${dmg[0]}"
+          # The DMG is a wrapper around the already-stapled .app.
+          # electron-builder leaves it unsigned (dmg.sign defaults to false)
+          # because a signed-but-un-notarized DMG fights notary.
           for a in $(lipo -archs "$APP/Contents/MacOS/OneTools"); do
             case "$a" in x86_64) dir=x64 ;; *) dir="$a" ;; esac
             test -f "$APP/Contents/Resources/ffmpeg/$dir/ffmpeg"
