@@ -35,14 +35,24 @@ The presence of an `out/` directory is **not** proof that Electron installed cor
 
 ### FFmpeg binary
 
-The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`.
+The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`. It looks in `<process.arch>` first and then in the other macOS architecture (`getFfmpegArchCandidates`), so a universal build or a Rosetta-launched app still finds its binary.
+
+Fetch both architectures plus `ffprobe` with one command:
 
 ```bash
-# Easiest: copy your Homebrew ffmpeg into place
-./scripts/download-ffmpeg.sh
+./scripts/fetch-ffmpeg-macos.sh          # arm64 + x64, ffmpeg + ffprobe
+./scripts/fetch-ffmpeg-macos.sh arm64    # a single arch
 ```
 
-Or download a macOS static build manually from [evermeet.cx](https://evermeet.cx/ffmpeg/) (recommended) or [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) and place it at `resources/ffmpeg/arm64/ffmpeg`.
+The script pulls the pinned [eugeneware/ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release (FFmpeg 6.1.1) and **verifies every file against a SHA-256 hardcoded in the script** before installing it — a mismatch aborts without touching `resources/ffmpeg/`. The binaries are deliberately **not committed** (two arches x two binaries is ~250 MB of history); `resources/ffmpeg/` is gitignored.
+
+Whatever ends up there is validated by CI and must be:
+
+- **static / self-contained** — a Homebrew ffmpeg links ~17 dylibs from `/opt/homebrew`, so it cannot run on a machine without Homebrew and **cannot be notarized**;
+- **matching the target arch** — `resources/ffmpeg/arm64/ffmpeg` (Apple Silicon) and `resources/ffmpeg/x64/ffmpeg` (Intel);
+- **signed** — electron-builder signs nested binaries with the same Developer ID during packaging.
+
+Verify locally with `otool -L resources/ffmpeg/arm64/ffmpeg` — only `/usr/lib/...` and `/System/...` entries may remain. Anything else will fail the CI gate.
 
 ## Scripts
 
@@ -51,6 +61,7 @@ Or download a macOS static build manually from [evermeet.cx](https://evermeet.cx
 | `npm run dev` | Start Electron + Vite dev server with HMR (DevTools opens automatically). |
 | `npm run build` | Build main/preload/renderer via electron-vite → `out/`. |
 | `npm run build:mac` | Build + package as `.dmg`/`.zip` via electron-builder → `dist/`. |
+| `./scripts/fetch-ffmpeg-macos.sh` | Download + hash-verify the static FFmpeg/FFprobe binaries into `resources/ffmpeg/`. |
 | `npm test` | Run the Vitest unit-test suite once. |
 | `npm run test:watch` | Run Vitest in watch mode. |
 
@@ -123,12 +134,119 @@ When adding a capability, ask first: "Is this an option of an existing tool, or 
 
 ## Packaging
 
-`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so FFmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`. Code signing/notarization config is scaffolded but not wired to real credentials — without a Developer ID certificate, `electron-builder` skips signing and the app runs unsigned.
+`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so FFmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`.
 
 ```bash
-npm run build:mac          # → dist/onetools-<version>-arm64.dmg + .zip
+npm run build:mac           # → dist/onetools-<version>-arm64.dmg + .zip
 npm run build:mac:universal # universal binary (arm64 + x64)
 ```
+
+Local builds sign with whatever Developer ID identity is in your keychain; with none present, electron-builder fails (`forceCodeSigning: true`) rather than producing an unsigned app.
+
+### Code signing & notarization (CI) — mandatory
+
+Releases are built on GitHub-hosted macOS runners by `.github/workflows/build-macos.yml`:
+
+- push a `v*` tag → signed + notarized build published as a GitHub Release
+- push to a branch, or `workflow_dispatch` → signed + notarized build, uploaded as CI artifacts only
+
+**Signing and notarization are required; there is no unsigned path.** The secrets are checked in a first, cheap gate job (`Check signing secrets`, ubuntu-latest). If any of them is missing the run stops there with an explicit `::error`, before any macOS minutes are spent and before any unsigned artifact can exist. `.github/workflows/build-macos.yml` also runs electron-builder with `--config.forceCodeSigning=true`, so even a misconfigured identity fails the build instead of silently shipping an unsigned `.app`.
+
+| Secret | Purpose |
+| --- | --- |
+| `MAC_CSC_LINK` | base64 of the `.p12` (`base64 -i cert.p12`) or an `https://` URL to it. Must be a **Developer ID Application** certificate |
+| `MAC_CSC_KEY_PASSWORD` | password of that `.p12` |
+| `KEYCHAIN_PASSWORD` | any random string; password for the throwaway keychain the workflow creates |
+| `APPLE_ID` | Apple ID used for notarization |
+| `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
+
+The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the resolved identity is passed as `CSC_NAME`, and `electron-builder` re-imports the same `.p12` into its own keychain (which is what `@electron/notarize` looks the identity up in). It then signs with Hardened Runtime and submits the `.app` to Apple's notary service. The workflow verifies `codesign --verify --deep --strict` on the `.app` **and** on each bundled ffmpeg/ffprobe binary, then `xcrun stapler validate` + `spctl -a -t exec` before anything is uploaded. Any failure stops the run — a bad or unsigned artifact is never published.
+
+The FFmpeg binaries are fetched by the workflow itself (`./scripts/fetch-ffmpeg-macos.sh`, SHA-256-pinned) rather than committed to the repo, then verified with `otool`/`lipo`: a missing, dynamically linked or wrong-arch binary fails the build before packaging.
+
+`mac.identity` is intentionally **not** hardcoded in `electron-builder.yml`; it resolves from `CSC_NAME`/`CSC_LINK` only. `mac.forceCodeSigning: true` documents the same guarantee for local builds.
+
+## Where the signing secrets come from
+
+Three different things hide behind the six secrets. Getting them is a one-time,
+~30 minute job — but only `MAC_CSC_LINK`/`MAC_CSC_KEY_PASSWORD` involve Xcode,
+and `KEYCHAIN_PASSWORD` is not something you request from Apple at all.
+
+| # | Secret | Where it comes from | Time |
+| --- | --- | --- | --- |
+| 1-2 | `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | A **Developer ID Application** certificate: Apple Developer portal → *Certificates, Identifiers & Profiles* → `+` → *Developer ID — Application* (needs the Account Holder or Admin role) → Keychain Access → export the certificate **with its private key** as `.p12` | ~10 min |
+| 3 | `KEYCHAIN_PASSWORD` | Nothing to request — generate one: `openssl rand -base64 32` | 0 min |
+| 4-6 | `APPLE_APP_SPECIFIC_PASSWORD` | [appleid.apple.com](https://appleid.apple.com) → *Sign-In and Security* → *App-Specific Passwords* → `+` → name it `OneTools CI` | ~2 min |
+
+`APPLE_ID` is your own Apple ID (`you@example.com`); `APPLE_TEAM_ID` is the
+10-character team ID shown on the Developer portal *Membership* page or in
+`Keychain Access` under the certificate.
+
+### 1-2. Developer ID Application certificate
+
+1. Join the [Apple Developer Program](https://developer.apple.com/programs/) ($99/year) if you have not. Personal or organization account, both work.
+2. Go to the [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list) page and click `+`.
+3. Pick **Developer ID → Developer ID Application** (this is the only certificate type expected by the workflow). Not *Apple Development* — that one cannot sign a distributable app.
+4. Follow the *Create a Certificate Signing Request* guide with **Keychain Access → Certificate Assistant → Request a Certificate From a Certificate Authority** (choose *Saved to disk*). Upload the `.certSigningRequest`.
+5. Download the `.cer`, double-click it to install it into your login keychain, or do it from the portal.
+6. Expand the certificate in Keychain Access so the **private key** is visible, select both, *Export 2 Items…* → `.p12`, and give it a password. That password is `MAC_CSC_KEY_PASSWORD`.
+7. Base64-encode it:
+
+   ```bash
+   base64 -i DeveloperIDApplication.p12 | tr -d '\n' > csc_link.b64
+   # macOS < 14: base64 -i DeveloperIDApplication.p12 | pbcopy
+   ```
+
+   Put the single-line output into `MAC_CSC_LINK`, and the export password from step 6 into `MAC_CSC_KEY_PASSWORD`.
+
+   With an existing `.p12` you can also point `MAC_CSC_LINK` at an `https://` URL — useful if you keep it in a private bucket.
+
+### 3. `KEYCHAIN_PASSWORD`
+
+Not an Apple artifact. It is the password of the throwaway keychain the CI job
+creates to import the `.p12`; the certificate then never touches the runner's
+login keychain. Generate any strong random value and store it as a secret — it
+never leaves the job.
+
+```bash
+openssl rand -base64 32
+```
+
+### 4-6. App-specific password
+
+An app-specific password is a **notarization** credential, not a signing one.
+
+1. Go to [appleid.apple.com](https://appleid.apple.com), sign in with the Apple ID that belongs to the Developer team.
+2. *Sign-In and Security → App-Specific Passwords → `+`*.
+3. Name it e.g. `OneTools CI`, copy the generated password (format `abcd-efgh-ijkl-mnop`).
+4. Store it as `APPLE_APP_SPECIFIC_PASSWORD`.
+
+Two-factor authentication must be enabled on that Apple ID — Apple will not
+issue app-specific passwords otherwise. An app-specific password can be revoked
+individually in the same screen if it leaks; note that rotating it needs no
+certificate change.
+
+### Putting them into GitHub
+
+GitHub repo → *Settings → Secrets and variables → Actions → New repository secret*, one per secret name. Nothing needs to be committed to the repo. If your account/organization already has these under a shared name, reuse them and skip this section.
+
+To verify the certificate is the right kind before pushing a tag:
+
+```bash
+security find-identity -v -p codesigning        # after importing the .p12 locally
+# → 1) ABC123... "Developer ID Application: Your Name (TEAMID)"
+```
+
+### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `Check signing secrets` fails listing names | That secret is empty/typoed in the repo settings |
+| Job fails with `no identity found` | The `.p12` is *Apple Development* or *Apple Distribution*, not **Developer ID Application** — the workflow prints the identities it did find |
+| `security: SecKeychainItemImport: MAC verification failed` | Wrong `MAC_CSC_KEY_PASSWORD`, or the `.p12` was exported without its private key |
+| Notarization fails with `Invalid credentials` | `APPLE_APP_SPECIFIC_PASSWORD` is an Apple ID *login* password (or was revoked). App-specific passwords are required |
+| Notarization returns `Invalid` + `The signature does not include a secure timestamp` | Not this setup — that would be a packaging bug; the workflow passes `--timestamp` via Hardened Runtime |
 
 ## License
 
