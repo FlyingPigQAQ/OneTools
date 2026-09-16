@@ -1,0 +1,174 @@
+# Build the OneTools macOS app (dmg + zip) on GitHub-hosted macOS runners.
+#
+# Runs on a tag push (v*) to produce a GitHub Release with the artifacts, and
+# can also be triggered manually from the Actions tab (use_signing toggle).
+#
+# Signing/notarization is enabled by default and requires these repository
+# secrets (Settings > Secrets and variables > Actions):
+#   MAC_CSC_LINK                     base64 (.p12) or downloadable URL of the
+#                                    "Developer ID Application" certificate
+#   MAC_CSC_KEY_PASSWORD             password for the .p12 above
+#   APPLE_ID                         Apple ID used for notarization
+#   APPLE_APP_SPECIFIC_PASSWORD      app-specific password for that Apple ID
+#   APPLE_TEAM_ID                    10-char Apple Developer Team ID
+# Without them the build is automatically unsigned (CSC_IDENTITY_AUTO_DISCOVERY: false).
+
+name: Build macOS
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish artifacts to a GitHub Release'
+        type: boolean
+        default: false
+      use_signing:
+        description: 'Sign + notarize (requires MAC_* / APPLE_* secrets)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: Package macOS app
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    env:
+      # Keep the Electron / electron-builder binaries on the fast mirror used
+      # by this project (see electron-builder.yml: electronDownload.mirror).
+      ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+      ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        # `npm ci` also triggers this project's postinstall
+        # (electron-builder install-app-deps) and normally installs the Electron binary.
+        run: npm ci
+
+      - name: Ensure Electron binary is present
+        # npm/pnpm frequently skip electron's postinstall (see README); the
+        # electron-vite build needs it for the renderer bundle.
+        run: |
+          if [ ! -f node_modules/electron/path.txt ]; then
+            node node_modules/electron/install.js
+          fi
+          node -e "console.log('electron', require('electron/package.json').version)"
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Prepare FFmpeg binaries
+        # electron-builder packs resources/ffmpeg as extraResources. The app
+        # resolves the binary at Resources/ffmpeg/<process.arch>/ffmpeg, so each
+        # .app must contain only the binary matching its own architecture
+        # (dist/ contains <productName>.app for arm64 and the .zip target for x64).
+        run: |
+          set -eux
+          chmod +x resources/ffmpeg/*/ffmpeg
+          ls -la resources/ffmpeg/*/ffmpeg
+
+      - name: Import signing certificate
+        if: ${{ github.event_name == 'push' || inputs.use_signing }}
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${MAC_CSC_LINK:-}" ] || [ -z "${MAC_CSC_KEY_PASSWORD:-}" ]; then
+            echo "::error::use_signing was requested but MAC_CSC_LINK / MAC_CSC_KEY_PASSWORD secrets are not set."
+            exit 1
+          fi
+          # electron-builder accepts a base64 blob, file path or URL via CSC_LINK
+          echo "CSC_LINK=$MAC_CSC_LINK" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$MAC_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Notarization credentials
+        if: ${{ github.event_name == 'push' || inputs.use_signing }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APPLE_ID:-}" ] || [ -z "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] || [ -z "${APPLE_TEAM_ID:-}" ]; then
+            echo "::error::notarization needs APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID secrets."
+            exit 1
+          fi
+          echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+          echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+
+      - name: Build + package macOS universal app
+        # `electron-builder --mac` runs the project's own `build` script first
+        # (electron-vite build), then packages.
+        # --universal produces one .app/.dmg (plus the x64/arm64 zips) with both
+        # architectures; identity/notarize come from the env vars above when set.
+        # CSC_IDENTITY_AUTO_DISCOVERY=false keeps it offline & unsigned otherwise.
+        run: npx electron-builder --mac --universal --publish never
+
+      - name: Verify artifacts
+        run: |
+          set -eux
+          ls -la dist
+          for f in dist/*.dmg dist/*.zip; do
+            [ -e "$f" ] || { echo "::error::expected artifact $f was not produced"; exit 1; }
+          done
+          # each .app must ship the ffmpeg binary of its own architecture
+          found=0
+          for app in dist/mac*/OneTools.app; do
+            [ -d "$app" ] || continue
+            found=$((found+1))
+            arch=$(lipo -archs "$app/Contents/MacOS/OneTools")
+            echo "$app -> $arch"
+            for a in $arch; do
+              ls -la "$app/Contents/Resources/ffmpeg/$a/ffmpeg"
+            done
+          done
+          [ "$found" -gt 0 ] || { echo "::error::no packaged .app found in dist/"; exit 1; }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OneTools-macos-${{ github.ref_name }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest*.yml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'push' || inputs.create_release }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: OneTools ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          files: |
+            dist/*.dmg
+            dist/*.zip
+            dist/latest*.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
