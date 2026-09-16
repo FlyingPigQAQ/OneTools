@@ -59,6 +59,18 @@ jobs:
       - name: Fetch static FFmpeg binaries
         run: ./scripts/fetch-ffmpeg-macos.sh
 
+      - name: Compile app
+        # `out/` is gitignored. electron-builder does not run `npm run build`
+        # for us — locally that is chained by build:mac / build:mac:universal.
+        # CI calls electron-builder directly (to pass --publish never), so the
+        # electron-vite compile must be explicit or asar lacks out/main/index.js.
+        run: |
+          set -euo pipefail
+          npm run build
+          test -f out/main/index.js
+          test -f out/preload/index.js
+          test -f out/renderer/index.html
+
       - name: Build, sign, and notarize
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
