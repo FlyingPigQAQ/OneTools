@@ -157,11 +157,12 @@ Releases are built on GitHub-hosted macOS runners by `.github/workflows/build-ma
 | `MAC_CSC_LINK` | base64 of the `.p12` (`base64 -i cert.p12`) or an `https://` URL to it. Must be a **Developer ID Application** certificate |
 | `MAC_CSC_KEY_PASSWORD` | password of that `.p12` |
 | `KEYCHAIN_PASSWORD` | any random string; password for the throwaway keychain the workflow creates |
-| `APPLE_ID` | Apple ID used for notarization |
-| `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID |
 | `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
+| `APPLE_API_KEY` | App Store Connect **Team** API key: PEM contents of `AuthKey_*.p8`, or base64 of that file |
+| `APPLE_API_KEY_ID` | 10-character Key ID |
+| `APPLE_API_ISSUER` | Issuer UUID of that Team API key |
 
-The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the resolved identity is passed as `CSC_NAME`, and `electron-builder` re-imports the same `.p12` into its own keychain (which is what `@electron/notarize` looks the identity up in). It then signs with Hardened Runtime and submits the `.app` to Apple's notary service. The workflow verifies `codesign --verify --deep --strict` on the `.app` **and** on each bundled ffmpeg/ffprobe binary, then `xcrun stapler validate` + `spctl -a -t exec` before anything is uploaded. Any failure stops the run — a bad or unsigned artifact is never published.
+The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the resolved identity is passed as `CSC_NAME`, and `electron-builder` re-imports the same `.p12` into its own keychain (which is what `@electron/notarize` looks the identity up in). It then signs with Hardened Runtime and submits the `.app` to Apple's notary service via `notarytool` and the Team API key. The workflow verifies `codesign --verify --deep --strict` on the `.app` **and** on each bundled ffmpeg/ffprobe binary, then `xcrun stapler validate` before anything is uploaded. Any failure stops the run — a bad or unsigned artifact is never published.
 
 The FFmpeg binaries are fetched by the workflow itself (`./scripts/fetch-ffmpeg-macos.sh`, SHA-256-pinned) rather than committed to the repo, then verified with `otool`/`lipo`: a missing, dynamically linked or wrong-arch binary fails the build before packaging.
 
@@ -169,19 +170,17 @@ The FFmpeg binaries are fetched by the workflow itself (`./scripts/fetch-ffmpeg-
 
 ## Where the signing secrets come from
 
-Three different things hide behind the six secrets. Getting them is a one-time,
-~30 minute job — but only `MAC_CSC_LINK`/`MAC_CSC_KEY_PASSWORD` involve Xcode,
-and `KEYCHAIN_PASSWORD` is not something you request from Apple at all.
+Signing and notarization secrets come from two Apple artifacts plus one local
+password. Getting them is a one-time, ~30 minute job — only
+`MAC_CSC_LINK`/`MAC_CSC_KEY_PASSWORD` involve Keychain Access, and
+`KEYCHAIN_PASSWORD` is not something you request from Apple at all.
 
 | # | Secret | Where it comes from | Time |
 | --- | --- | --- | --- |
 | 1-2 | `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | A **Developer ID Application** certificate: Apple Developer portal → *Certificates, Identifiers & Profiles* → `+` → *Developer ID — Application* (needs the Account Holder or Admin role) → Keychain Access → export the certificate **with its private key** as `.p12` | ~10 min |
 | 3 | `KEYCHAIN_PASSWORD` | Nothing to request — generate one: `openssl rand -base64 32` | 0 min |
-| 4-6 | `APPLE_APP_SPECIFIC_PASSWORD` | [appleid.apple.com](https://appleid.apple.com) → *Sign-In and Security* → *App-Specific Passwords* → `+` → name it `OneTools CI` | ~2 min |
-
-`APPLE_ID` is your own Apple ID (`you@example.com`); `APPLE_TEAM_ID` is the
-10-character team ID shown on the Developer portal *Membership* page or in
-`Keychain Access` under the certificate.
+| 4 | `APPLE_TEAM_ID` | Developer portal *Membership* page, or the `(TEAMID)` in the certificate subject | 0 min |
+| 5-7 | `APPLE_API_KEY`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` | [App Store Connect](https://appstoreconnect.apple.com) → *Users and Access* → *Integrations* → *Team Keys* → generate a key (Admin or Developer). Download `AuthKey_<KEYID>.p8` once; copy the Key ID and Issuer UUID | ~5 min |
 
 ### 1-2. Developer ID Application certificate
 
@@ -213,19 +212,27 @@ never leaves the job.
 openssl rand -base64 32
 ```
 
-### 4-6. App-specific password
+### 4. `APPLE_TEAM_ID`
 
-An app-specific password is a **notarization** credential, not a signing one.
+The 10-character team ID on the Developer portal *Membership* page, or in
+Keychain Access under the certificate subject: `Developer ID Application: … (TEAMID)`.
 
-1. Go to [appleid.apple.com](https://appleid.apple.com), sign in with the Apple ID that belongs to the Developer team.
-2. *Sign-In and Security → App-Specific Passwords → `+`*.
-3. Name it e.g. `OneTools CI`, copy the generated password (format `abcd-efgh-ijkl-mnop`).
-4. Store it as `APPLE_APP_SPECIFIC_PASSWORD`.
+### 5-7. App Store Connect Team API key
 
-Two-factor authentication must be enabled on that Apple ID — Apple will not
-issue app-specific passwords otherwise. An app-specific password can be revoked
-individually in the same screen if it leaks; note that rotating it needs no
-certificate change.
+Notarization authenticates with a **Team** API key (not an Apple ID, and not
+an Individual key — Individual keys omit the issuer and electron-builder will
+not pick them up).
+
+1. Open [App Store Connect](https://appstoreconnect.apple.com) → *Users and Access* → *Integrations* → *Team Keys*.
+2. Create a key with at least **Developer** access. You can download the `.p8` **once**.
+3. Store:
+   - `APPLE_API_KEY_ID` — the 10-character Key ID
+   - `APPLE_API_ISSUER` — the Issuer UUID shown on that page
+   - `APPLE_API_KEY` — either the PEM text of `AuthKey_<KEYID>.p8`, or `base64 -i AuthKey_<KEYID>.p8 | tr -d '\n'`
+
+Revoking the key in App Store Connect invalidates notarization until you
+generate a new key and update the three secrets. It does not require a new
+Developer ID certificate.
 
 ### Putting them into GitHub
 
@@ -245,7 +252,7 @@ security find-identity -v -p codesigning        # after importing the .p12 local
 | `Check signing secrets` fails listing names | That secret is empty/typoed in the repo settings |
 | Job fails with `no identity found` | The `.p12` is *Apple Development* or *Apple Distribution*, not **Developer ID Application** — the workflow prints the identities it did find |
 | `security: SecKeychainItemImport: MAC verification failed` | Wrong `MAC_CSC_KEY_PASSWORD`, or the `.p12` was exported without its private key |
-| Notarization fails with `Invalid credentials` | `APPLE_APP_SPECIFIC_PASSWORD` is an Apple ID *login* password (or was revoked). App-specific passwords are required |
+| Notarization fails with `401` / `Unable to authenticate` | Wrong `APPLE_API_KEY` / `APPLE_API_KEY_ID` / `APPLE_API_ISSUER`, or an Individual key was used (omit-issuer keys are not supported — use a Team key) |
 | Notarization returns `Invalid` + `The signature does not include a secure timestamp` | Not this setup — that would be a packaging bug; the workflow passes `--timestamp` via Hardened Runtime |
 
 ## License

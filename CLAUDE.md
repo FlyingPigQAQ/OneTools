@@ -100,4 +100,4 @@ The shared file-open dialog (`IPC.SELECT_INPUT_FILES`) takes an optional `kind: 
 
 ## Packaging
 
-`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so ffmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`. Code signing/notarization is mandatory in CI (`forceCodeSigning: true`, no unsigned path); the six GitHub secrets are documented in README → *Where the signing secrets come from*.
+`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so ffmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`. Code signing/notarization is mandatory in CI (`forceCodeSigning: true`, no unsigned path); the GitHub secrets are documented in README → *Where the signing secrets come from*.
