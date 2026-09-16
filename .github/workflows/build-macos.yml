@@ -3,7 +3,11 @@
 # Secrets: MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD,
 # APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER
 #
-# A v* tag, or workflow_dispatch with create_release, publishes a GitHub Release.
+# Push to a branch: unit tests + electron-vite compile only (~1 min).
+# A v* tag, or workflow_dispatch, also packages a signed + notarized
+# universal .dmg/.zip. workflow_dispatch with create_release publishes
+# a GitHub Release.
+#
 # electron-builder imports CSC_LINK into a temporary keychain, signs with
 # Hardened Runtime, then notarizes via notarytool (App Store Connect API key).
 
@@ -32,10 +36,13 @@ concurrency:
 env:
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
   ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+  # Universal + Apple notarization is ~7 min. Only spend that on a release
+  # tag or a manual run, not on every branch push.
+  PACKAGE: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
 
 jobs:
   macos:
-    name: Package macOS app
+    name: ${{ (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && 'Package macOS app' || 'Test' }}
     runs-on: macos-26
     timeout-minutes: 90
 
@@ -56,9 +63,6 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Fetch static FFmpeg binaries
-        run: ./scripts/fetch-ffmpeg-macos.sh
-
       - name: Compile app
         # `out/` is gitignored. electron-builder does not run `npm run build`
         # for us — locally that is chained by build:mac / build:mac:universal.
@@ -71,7 +75,21 @@ jobs:
           test -f out/preload/index.js
           test -f out/renderer/index.html
 
+      - name: Cache Electron downloads
+        if: env.PACKAGE == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Fetch static FFmpeg binaries
+        if: env.PACKAGE == 'true'
+        run: ./scripts/fetch-ffmpeg-macos.sh
+
       - name: Build, sign, and notarize
+        if: env.PACKAGE == 'true'
         env:
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
@@ -90,6 +108,7 @@ jobs:
           APPLE_API_KEY="$KEY" npx electron-builder --mac --universal --publish never
 
       - name: Verify artifacts
+        if: env.PACKAGE == 'true'
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -114,6 +133,7 @@ jobs:
           done
 
       - uses: actions/upload-artifact@v4
+        if: env.PACKAGE == 'true'
         with:
           name: OneTools-macos-${{ github.run_id }}
           path: |
