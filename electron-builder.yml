@@ -16,8 +16,6 @@ files:
 extraResources:
   - from: resources/ffmpeg
     to: ffmpeg
-    filter:
-      - "${arch}/**/*"
 
 mac:
   category: public.app-category.utilities
@@ -31,6 +29,10 @@ mac:
   gatekeeperAssess: false
   notarize: true
   forceCodeSigning: true
+  # Both slices of a universal app must carry ffmpeg/arm64 and ffmpeg/x64
+  # (runtime looks up Resources/ffmpeg/<process.arch>/). Those binaries are
+  # already single-arch; skip lipo when the copies are identical.
+  x64ArchFiles: Contents/Resources/ffmpeg/**/*
 
 dmg:
   artifactName: ${name}-${version}-${arch}.${ext}
