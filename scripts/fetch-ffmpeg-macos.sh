@@ -34,8 +34,9 @@
 #   ./scripts/fetch-ffmpeg-macos.sh arm64 ffmpeg    # one arch, one binary
 #   ./scripts/fetch-ffmpeg-macos.sh --print-hashes  # download and print hashes only
 #
-# The script is a plain downloader, so it runs on Linux and macOS alike. (The
-# macOS-only verification — otool/lipo — lives in the CI workflow.)
+# The script is a plain downloader on Linux. On macOS it also runs otool/lipo
+# after install, so a dynamically linked or wrong-arch binary never reaches
+# packaging.
 
 set -euo pipefail
 
@@ -171,7 +172,21 @@ done
 echo
 echo "Installed into ${DEST_ROOT}:"
 find "${DEST_ROOT}" -type f -name 'ffmpeg' -o -type f -name 'ffprobe' | sort
-echo
-echo "The CI workflow (.github/workflows/build-macos.yml) verifies these with"
-echo "otool/lipo on macOS before packaging — it downloads them itself, so this"
-echo "script is only needed for local builds and hash bumps."
+
+if command -v lipo >/dev/null 2>&1 && command -v otool >/dev/null 2>&1; then
+  echo
+  for bin in "${DEST_ROOT}"/*/ffmpeg "${DEST_ROOT}"/*/ffprobe; do
+    [ -f "$bin" ] || continue
+    archs=$(lipo -archs "$bin")
+    case "$bin" in
+      */arm64/*) echo "$archs" | grep -qw arm64  || { echo "ERROR $bin is not arm64" >&2; exit 1; } ;;
+      */x64/*)   echo "$archs" | grep -qw x86_64 || { echo "ERROR $bin is not x86_64" >&2; exit 1; } ;;
+    esac
+    deps=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' | grep -v '^/usr/lib/' | grep -v '^/System/' || true)
+    if [ -n "$deps" ]; then
+      echo "ERROR $bin links libraries outside /usr/lib and /System ($deps)." >&2
+      exit 1
+    fi
+    echo "OK   ${bin#"${DEST_ROOT}"/}  ${archs}  static"
+  done
+fi

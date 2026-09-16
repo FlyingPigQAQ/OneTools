@@ -16,8 +16,6 @@ files:
 extraResources:
   - from: resources/ffmpeg
     to: ffmpeg
-    # Only ship the binary that matches the target arch: a signed/notarized
-    # build must not contain a foreign-arch Mach-O.
     filter:
       - "${arch}/**/*"
 
@@ -31,19 +29,7 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   icon: resources/icon.icns
   gatekeeperAssess: false
-  # The signing identity is NEVER hardcoded here. It is resolved at build time
-  # from the environment: CSC_NAME / CSC_LINK / CSC_KEY_PASSWORD / CSC_KEYCHAIN
-  # (see .github/workflows/build-macos.yml, which imports the Developer ID
-  # certificate into a temporary keychain).
-  # Signing is mandatory: release builds pass --config.forceCodeSigning=true,
-  # so a missing identity fails the build instead of producing an unsigned app.
-  # `notarize: true` submits the .app to Apple's notary service via notarytool
-  # using APPLE_API_KEY / APPLE_API_KEY_ID / APPLE_API_ISSUER. It is only
-  # attempted when CSC_LINK is set (electron-builder imports the .p12 into its
-  # own keychain first, which is where the identity used for notarization is
-  # looked up).
   notarize: true
-  # Fail the build rather than fall back to an unsigned app.
   forceCodeSigning: true
 
 dmg:
@@ -57,5 +43,3 @@ dmg:
       path: /Applications
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/
-# zip target uses the default artifactName: ${productName}-${version}-${arch}.zip
-# (electron-builder 26 removed the root-level `zip` config block)

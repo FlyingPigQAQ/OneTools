@@ -1,38 +1,11 @@
-# Build, sign, notarize and publish the OneTools macOS app on GitHub-hosted runners.
+# Sign, notarize, and publish OneTools for macOS.
 #
-# Triggers
-#   - push of a `v*` tag  -> signed + notarized build, published as a GitHub Release
-#   - push to other refs  -> signed + notarized build, artifacts only (no Release)
-#   - workflow_dispatch   -> manual run, same as above
+# Secrets: MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD,
+# APPLE_API_KEY, APPLE_API_KEY_ID, APPLE_API_ISSUER
 #
-# SIGNING IS MANDATORY. Every run must produce a signed + notarized app; there is
-# no "unsigned fallback" path. If the secrets below are missing, the workflow
-# resolves them in the very first job and stops there — the build never starts,
-# nothing unsigned is ever produced.
-#
-# Required repository secrets (Settings > Secrets and variables > Actions):
-#   MAC_CSC_LINK                    base64 (.p12, `base64 -i cert.p12`) or an https URL
-#                                   of the "Developer ID Application" certificate.
-#                                   Imported into a dedicated keychain (macOS runners have
-#                                   none unlocked for codesign); also re-imported into
-#                                   electron-builder's own keychain so that @electron/notarize
-#                                   can find the signing identity.
-#   MAC_CSC_KEY_PASSWORD            password of that .p12
-#   KEYCHAIN_PASSWORD               any random string; password of the temporary keychain
-#   APPLE_TEAM_ID                   10-char Apple Developer Team ID
-#   APPLE_API_KEY                   App Store Connect Team API key: PEM contents of the
-#                                   AuthKey_*.p8 file, or base64 of that file.
-#                                   electron-builder needs a filesystem path, so the
-#                                   workflow writes this secret to a temp file first.
-#   APPLE_API_KEY_ID                10-char Key ID
-#   APPLE_API_ISSUER                Issuer UUID of that Team API key
-#
-# Notarization uses notarytool with the App Store Connect Team API key only.
-# There is no Apple ID / app-specific-password path.
-#
-# Runner is macos-26 (Xcode 26) because macos-14 was retired 2026-11-02.
-# Local (unsigned) builds are still possible with `npm run build:mac` — the
-# local path is unaffected by this workflow.
+# A v* tag, or workflow_dispatch with create_release, publishes a GitHub Release.
+# electron-builder imports CSC_LINK into a temporary keychain, signs with
+# Hardened Runtime, then notarizes via notarytool (App Store Connect API key).
 
 name: Build macOS
 
@@ -57,302 +30,79 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Keep the Electron / electron-builder binaries on the fast mirror used by
-  # this project (see electron-builder.yml: electronDownload.mirror).
   ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
   ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-  # Signing is mandatory; never let electron-builder silently fall back to an
-  # unsigned build when the identity cannot be resolved. The Developer ID
-  # certificate is imported into a temporary keychain before the build.
-  CSC_IDENTITY_AUTO_DISCOVERY: 'true'
-  CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
 
 jobs:
-  # Gate job: resolve the signing/notarization secrets on a cheap Linux runner.
-  # A missing secret fails the whole run here, before any macOS minutes (or any
-  # unsigned artifact) can be produced.
-  secrets:
-    name: Check signing secrets
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      has_signing: ${{ steps.check.outputs.has_signing }}
-    steps:
-      - name: Require signing + notarization secrets
-        id: check
-        env:
-          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: |
-          set -euo pipefail
-          missing=""
-          [ -n "${MAC_CSC_LINK:-}" ]         || missing="$missing MAC_CSC_LINK"
-          [ -n "${MAC_CSC_KEY_PASSWORD:-}" ] || missing="$missing MAC_CSC_KEY_PASSWORD"
-          [ -n "${KEYCHAIN_PASSWORD:-}" ]    || missing="$missing KEYCHAIN_PASSWORD"
-          [ -n "${APPLE_TEAM_ID:-}" ]        || missing="$missing APPLE_TEAM_ID"
-          [ -n "${APPLE_API_KEY:-}" ]        || missing="$missing APPLE_API_KEY"
-          [ -n "${APPLE_API_KEY_ID:-}" ]     || missing="$missing APPLE_API_KEY_ID"
-          [ -n "${APPLE_API_ISSUER:-}" ]     || missing="$missing APPLE_API_ISSUER"
-          if [ -n "$missing" ]; then
-            echo "::error title=Signing secrets not configured::OneTools requires every release to be signed and notarized with an App Store Connect Team API key. Missing repository secrets:${missing}. Add them under Settings > Secrets and variables > Actions, then re-run this workflow."
-            exit 1
-          fi
-          echo "has_signing=true" >> "$GITHUB_OUTPUT"
-          echo "All signing + notarization secrets are present."
-
   macos:
     name: Package macOS app
-    needs: secrets
-    if: needs.secrets.outputs.has_signing == 'true'
     runs-on: macos-26
     timeout-minutes: 90
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Select Xcode 26
-        # macos-26 defaults to Xcode 26.x, which ships the current notarytool.
-        # Fail fast if GitHub ever ships an older default on this image.
-        run: |
-          set -euo pipefail
-          xcodebuild -version
-          major=$(xcodebuild -version | awk '/Xcode/ { print int($2) }')
-          if [ "${major:-0}" -lt 26 ]; then
-            echo "::error title=Xcode too old::Need Xcode 26+ on macos-26 (got $(xcodebuild -version | head -1))."
-            exit 1
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        # `npm ci` also triggers this project's postinstall
-        # (electron-builder install-app-deps) and normally installs the Electron binary.
-        run: npm ci
-
-      - name: Ensure Electron binary is present
-        # npm/pnpm frequently skip electron's postinstall (see README); the
-        # electron-vite build needs it for the renderer bundle.
         run: |
-          if [ ! -f node_modules/electron/path.txt ]; then
-            node node_modules/electron/install.js
-          fi
-          node -e "console.log('electron', require('electron/package.json').version)"
+          npm ci
+          [ -f node_modules/electron/path.txt ] || node node_modules/electron/install.js
 
       - name: Unit tests
         run: npm test
 
       - name: Fetch static FFmpeg binaries
-        # The app resolves its binary at Resources/ffmpeg/<process.arch>/ffmpeg,
-        # so each .app must ship the binary matching its own architecture.
-        #
-        # The binaries are NOT committed to the repo (~250 MB): this step downloads
-        # the pinned https://github.com/eugeneware/ffmpeg-static release and
-        # verifies every file against the SHA-256 hardcoded in
-        # scripts/fetch-ffmpeg-macos.sh. A hash mismatch fails the run — a tampered
-        # or silently re-tagged upstream artifact can never reach a signed build.
         run: ./scripts/fetch-ffmpeg-macos.sh
 
-      - name: Verify FFmpeg binaries
-        # Hard gate, not a warning: a Homebrew ffmpeg links dylibs from
-        # /opt/homebrew, which are neither present on the runner nor hardened, so
-        # notarization would fail. Only /usr/lib and /System dependencies may remain.
-        run: |
-          set -eux
-          chmod +x resources/ffmpeg/*/ffmpeg resources/ffmpeg/*/ffprobe
-          for bin in resources/ffmpeg/*/ffmpeg resources/ffmpeg/*/ffprobe; do
-            echo "== $bin"
-            otool -L "$bin"
-            archs=$(lipo -archs "$bin")
-            echo "arch: $archs"
-            case "$bin" in
-              */arm64/*) echo "$archs" | grep -qw arm64  || { echo "::error::$bin is not an arm64 binary"; exit 1; } ;;
-              */x64/*)   echo "$archs" | grep -qw x86_64 || { echo "::error::$bin is not an x86_64 binary"; exit 1; } ;;
-            esac
-            # A non-static binary references Homebrew/absolute paths: those
-            # dylibs are not on the runner and not hardened, so notarization
-            # would fail. Hard error, not a warning.
-            deps=$(otool -L "$bin" | tail -n +2 | awk '{print $1}' | grep -v '^/usr/lib/' | grep -v '^/System/' || true)
-            if [ -n "$deps" ]; then
-              echo "::error title=Dynamically linked FFmpeg::$bin links libraries outside /usr/lib and /System ($deps). Replace it with a self-contained static build — a Homebrew build cannot pass notarization."
-              exit 1
-            fi
-          done
-
-      - name: Import signing certificate
-        # Used to (a) prove the .p12 really contains a Developer ID Application
-        # identity before the expensive build, and (b) let the verification steps
-        # run codesign. electron-builder imports the same certificate into its own
-        # throwaway keychain so @electron/notarize can look the identity up too.
+      - name: Build, sign, and notarize
         env:
-          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          set -euo pipefail
-          # macOS runners have no keychain unlocked for codesign, so import the
-          # .p12 into a dedicated temporary keychain. CSC_KEYCHAIN also points
-          # electron-builder at it for the identity lookup.
-          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
-          KEYCHAIN_PW="${KEYCHAIN_PASSWORD:-$(openssl rand -hex 16)}"
-          CERT_PATH="$RUNNER_TEMP/cert.p12"
-
-          # CSC_LINK accepts base64 or an https URL.
-          case "$MAC_CSC_LINK" in
-            https://*) curl -fsSL -o "$CERT_PATH" "$MAC_CSC_LINK" ;;
-            *)         echo "$MAC_CSC_LINK" | base64 --decode > "$CERT_PATH" ;;
-          esac
-
-          security create-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN"
-          security unlock-keychain -p "$KEYCHAIN_PW" "$KEYCHAIN"
-          security import "$CERT_PATH" -k "$KEYCHAIN" -P "$MAC_CSC_KEY_PASSWORD" \
-            -T /usr/bin/codesign -T /usr/bin/security
-          # Required on macOS 11+ so codesign does not prompt for keychain access.
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PW" "$KEYCHAIN" >/dev/null
-          # Prepend to the search list so codesign finds this identity.
-          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
-
-          rm -f "$CERT_PATH"
-
-      - name: Resolve signing identity
-        id: identity
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          security find-identity -v -p codesigning
-          # Prefer the Developer ID identity belonging to our team, else any
-          # Developer ID Application identity. Parsed in plain grep/awk so that
-          # the parentheses inside the team id are not treated as regex groups.
-          ALL=$(security find-identity -v -p codesigning \
-            | grep -o '"Developer ID Application: [^"]*"' | tr -d '"')
-          ID=$(printf '%s\n' "$ALL" | grep -F "($APPLE_TEAM_ID)" | head -1)
-          [ -n "$ID" ] || ID=$(printf '%s\n' "$ALL" | head -1)
-          if [ -z "$ID" ]; then
-            echo "::error title=No Developer ID Application identity::the keychain imported from MAC_CSC_LINK contains no 'Developer ID Application' certificate (an Apple Development certificate cannot sign a distributable app)."
-            exit 1
-          fi
-          echo "identity=$ID" >> "$GITHUB_OUTPUT"
-          echo "Using identity: $ID"
-
-      - name: Prepare notarization credentials
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-        run: |
-          set -euo pipefail
-          # electron-builder's APPLE_API_KEY must be a filesystem path, not PEM
-          # contents. The gate job already required the secret; fail if the
-          # written key file is empty.
-          KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
-          if printf '%s' "$APPLE_API_KEY" | grep -q 'BEGIN PRIVATE KEY'; then
-            printf '%s\n' "$APPLE_API_KEY" > "$KEY_PATH"
-          else
-            printf '%s' "$APPLE_API_KEY" | base64 --decode > "$KEY_PATH"
-          fi
-          chmod 600 "$KEY_PATH"
-          [ -s "$KEY_PATH" ] || {
-            echo "::error title=Empty API key::APPLE_API_KEY decoded to an empty file"
-            exit 1
-          }
-          echo "APPLE_API_KEY=$KEY_PATH" >> "$GITHUB_ENV"
-          echo "Wrote App Store Connect API key to $KEY_PATH"
-
-      - name: Build + sign + notarize macOS app
-        # `electron-builder --mac --universal` runs the project's own `build`
-        # script first (electron-vite build), then packages, signs with Hardened
-        # Runtime and submits the .app to Apple's notary service.
-        # `--config.forceCodeSigning=true` makes electron-builder itself fail if
-        # no identity is available, so an unsigned build cannot slip through.
-        env:
-          # Identity comes from the temporary keychain, not electron-builder.yml.
-          CSC_NAME: ${{ steps.identity.outputs.identity }}
           CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_SECRET: ${{ secrets.APPLE_API_KEY }}
         run: |
           set -euo pipefail
-          test -n "${CSC_NAME:-}"
-          npx electron-builder --mac --universal --publish never \
-            --config.forceCodeSigning=true
-
-      - name: Verify signature
-        run: |
-          set -eux
-          # Every binary in a notarized bundle must carry a valid signature,
-          # Hardened Runtime, and a secure timestamp.
-          APP=$(ls -d dist/mac*/OneTools.app | head -1)
-          echo "== verifying $APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
-          DUMP=$(codesign -dv --verbose=4 "$APP" 2>&1)
-          printf '%s\n' "$DUMP" | grep -E 'Authority|TeamIdentifier|Identifier|Runtime|Timestamp|flags='
-          printf '%s\n' "$DUMP" | grep -Ei 'flags=.*runtime' >/dev/null \
-            || { echo "::error title=Hardened Runtime missing::$APP is not signed with --options runtime"; exit 1; }
-          printf '%s\n' "$DUMP" | grep -E '^Timestamp=' >/dev/null \
-            || { echo "::error title=Secure timestamp missing::$APP signature has no secure timestamp"; exit 1; }
-          # A signed .app must not contain unsigned nested Mach-O binaries.
-          for bin in "$APP"/Contents/Resources/ffmpeg/*/ffmpeg "$APP"/Contents/Resources/ffmpeg/*/ffprobe; do
-            [ -e "$bin" ] || continue
-            echo "== $bin"
-            codesign --verify --strict --verbose=2 "$bin"
-          done
-          echo "== dmg =="
-          codesign --verify --verbose=2 dist/*.dmg
-
-      - name: Verify notarization
-        run: |
-          set -eux
-          # Stapler is the authoritative CI check. `spctl --assess` is omitted:
-          # GitHub-hosted images do not ship a full Gatekeeper policy database
-          # and commonly return "Insufficient Context".
-          APP=$(ls -d dist/mac*/OneTools.app | head -1)
-          xcrun stapler validate "$APP"
-          echo "stapled: $APP"
-          for f in dist/*.dmg; do
-            xcrun stapler validate "$f"
-            echo "stapled: $f"
-          done
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          if printf '%s' "$APPLE_API_KEY_SECRET" | grep -q 'BEGIN PRIVATE KEY'; then
+            printf '%s\n' "$APPLE_API_KEY_SECRET" > "$KEY"
+          else
+            printf '%s' "$APPLE_API_KEY_SECRET" | base64 --decode > "$KEY"
+          fi
+          chmod 600 "$KEY"
+          APPLE_API_KEY="$KEY" npx electron-builder --mac --universal --publish never
 
       - name: Verify artifacts
         run: |
-          set -eux
-          ls -la dist
-          for f in dist/*.dmg dist/*.zip; do
-            [ -e "$f" ] || { echo "::error::expected artifact $f was not produced"; exit 1; }
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(dist/mac*/OneTools.app)
+          dmg=(dist/*.dmg)
+          zip=(dist/*.zip)
+          APP="${apps[0]:-}"
+          [ -d "$APP" ] || { echo "::error::no packaged .app in dist/"; exit 1; }
+          (( ${#dmg[@]} > 0 && ${#zip[@]} > 0 )) || {
+            echo "::error::expected dist/*.dmg and dist/*.zip"
+            exit 1
+          }
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          xcrun stapler validate "$APP"
+          codesign --verify --verbose=2 "${dmg[0]}"
+          xcrun stapler validate "${dmg[0]}"
+          for a in $(lipo -archs "$APP/Contents/MacOS/OneTools"); do
+            case "$a" in x86_64) dir=x64 ;; *) dir="$a" ;; esac
+            test -f "$APP/Contents/Resources/ffmpeg/$dir/ffmpeg"
+            test -f "$APP/Contents/Resources/ffmpeg/$dir/ffprobe"
           done
-          found=0
-          for app in dist/mac*/OneTools.app; do
-            [ -d "$app" ] || continue
-            found=$((found+1))
-            arch=$(lipo -archs "$app/Contents/MacOS/OneTools")
-            echo "$app -> $arch"
-            for a in $arch; do
-              # lipo reports x86_64; the bundled layout uses Node's x64.
-              case "$a" in
-                x86_64) dir=x64 ;;
-                *)      dir="$a" ;;
-              esac
-              ls -la "$app/Contents/Resources/ffmpeg/$dir/ffmpeg" "$app/Contents/Resources/ffmpeg/$dir/ffprobe"
-            done
-          done
-          [ "$found" -gt 0 ] || { echo "::error::no packaged .app found in dist/"; exit 1; }
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: OneTools-macos-${{ github.ref_name }}
+          name: OneTools-macos-${{ github.run_id }}
           path: |
             dist/*.dmg
             dist/*.zip
@@ -360,13 +110,12 @@ jobs:
           retention-days: 14
 
       - name: Publish GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.create_release }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true') }}
         uses: softprops/action-gh-release@v2
         with:
           name: OneTools ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          draft: false
           files: |
             dist/*.dmg
             dist/*.zip
