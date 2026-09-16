@@ -4,7 +4,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { chmod } from 'fs/promises';
 import { getFfmpegBinaryPath } from '../utils/paths';
-import { getProcessArch } from '../utils/platform';
+import { getFfmpegArchCandidates, getProcessArch } from '../utils/platform';
 import type { FFmpegStatus } from '@shared/types';
 
 const execFileAsync = promisify(execFile);
@@ -15,18 +15,21 @@ class FFmpegManager {
   async resolveBinary(): Promise<string | null> {
     if (this.resolvedPath) return this.resolvedPath;
 
-    const arch = getProcessArch();
-    const bundledPath = join(getFfmpegBinaryPath(), arch, 'ffmpeg');
+    // Try the bundled binary first. On macOS the binary is stored per
+    // architecture; the candidate list handles Rosetta and the universal build,
+    // where resources/ffmpeg holds both arm64/ and x64/.
+    for (const arch of getFfmpegArchCandidates(getProcessArch())) {
+      const bundledPath = join(getFfmpegBinaryPath(), arch, 'ffmpeg');
 
-    // Try bundled binary first
-    if (existsSync(bundledPath)) {
+      if (!existsSync(bundledPath)) continue;
+
       try {
         await chmod(bundledPath, 0o755);
         await execFileAsync(bundledPath, ['-version']);
         this.resolvedPath = bundledPath;
         return bundledPath;
       } catch {
-        // Bundled binary doesn't work, fall through
+        // Bundled binary doesn't work, try the next candidate
       }
     }
 

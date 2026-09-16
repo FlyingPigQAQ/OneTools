@@ -35,7 +35,7 @@ The presence of an `out/` directory is **not** proof that Electron installed cor
 
 ### FFmpeg binary
 
-The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`.
+The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`. It looks in `<process.arch>` first and then in the other macOS architecture (`getFfmpegArchCandidates`), so a universal build or a Rosetta-launched app still finds its binary.
 
 Fetch both architectures plus `ffprobe` with one command:
 
@@ -166,6 +166,87 @@ The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the reso
 The FFmpeg binaries are fetched by the workflow itself (`./scripts/fetch-ffmpeg-macos.sh`, SHA-256-pinned) rather than committed to the repo, then verified with `otool`/`lipo`: a missing, dynamically linked or wrong-arch binary fails the build before packaging.
 
 `mac.identity` is intentionally **not** hardcoded in `electron-builder.yml`; it resolves from `CSC_NAME`/`CSC_LINK` only. `mac.forceCodeSigning: true` documents the same guarantee for local builds.
+
+## Where the signing secrets come from
+
+Three different things hide behind the six secrets. Getting them is a one-time,
+~30 minute job — but only `MAC_CSC_LINK`/`MAC_CSC_KEY_PASSWORD` involve Xcode,
+and `KEYCHAIN_PASSWORD` is not something you request from Apple at all.
+
+| # | Secret | Where it comes from | Time |
+| --- | --- | --- | --- |
+| 1-2 | `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD` | A **Developer ID Application** certificate: Apple Developer portal → *Certificates, Identifiers & Profiles* → `+` → *Developer ID — Application* (needs the Account Holder or Admin role) → Keychain Access → export the certificate **with its private key** as `.p12` | ~10 min |
+| 3 | `KEYCHAIN_PASSWORD` | Nothing to request — generate one: `openssl rand -base64 32` | 0 min |
+| 4-6 | `APPLE_APP_SPECIFIC_PASSWORD` | [appleid.apple.com](https://appleid.apple.com) → *Sign-In and Security* → *App-Specific Passwords* → `+` → name it `OneTools CI` | ~2 min |
+
+`APPLE_ID` is your own Apple ID (`you@example.com`); `APPLE_TEAM_ID` is the
+10-character team ID shown on the Developer portal *Membership* page or in
+`Keychain Access` under the certificate.
+
+### 1-2. Developer ID Application certificate
+
+1. Join the [Apple Developer Program](https://developer.apple.com/programs/) ($99/year) if you have not. Personal or organization account, both work.
+2. Go to the [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list) page and click `+`.
+3. Pick **Developer ID → Developer ID Application** (this is the only certificate type expected by the workflow). Not *Apple Development* — that one cannot sign a distributable app.
+4. Follow the *Create a Certificate Signing Request* guide with **Keychain Access → Certificate Assistant → Request a Certificate From a Certificate Authority** (choose *Saved to disk*). Upload the `.certSigningRequest`.
+5. Download the `.cer`, double-click it to install it into your login keychain, or do it from the portal.
+6. Expand the certificate in Keychain Access so the **private key** is visible, select both, *Export 2 Items…* → `.p12`, and give it a password. That password is `MAC_CSC_KEY_PASSWORD`.
+7. Base64-encode it:
+
+   ```bash
+   base64 -i DeveloperIDApplication.p12 | tr -d '\n' > csc_link.b64
+   # macOS < 14: base64 -i DeveloperIDApplication.p12 | pbcopy
+   ```
+
+   Put the single-line output into `MAC_CSC_LINK`, and the export password from step 6 into `MAC_CSC_KEY_PASSWORD`.
+
+   With an existing `.p12` you can also point `MAC_CSC_LINK` at an `https://` URL — useful if you keep it in a private bucket.
+
+### 3. `KEYCHAIN_PASSWORD`
+
+Not an Apple artifact. It is the password of the throwaway keychain the CI job
+creates to import the `.p12`; the certificate then never touches the runner's
+login keychain. Generate any strong random value and store it as a secret — it
+never leaves the job.
+
+```bash
+openssl rand -base64 32
+```
+
+### 4-6. App-specific password
+
+An app-specific password is a **notarization** credential, not a signing one.
+
+1. Go to [appleid.apple.com](https://appleid.apple.com), sign in with the Apple ID that belongs to the Developer team.
+2. *Sign-In and Security → App-Specific Passwords → `+`*.
+3. Name it e.g. `OneTools CI`, copy the generated password (format `abcd-efgh-ijkl-mnop`).
+4. Store it as `APPLE_APP_SPECIFIC_PASSWORD`.
+
+Two-factor authentication must be enabled on that Apple ID — Apple will not
+issue app-specific passwords otherwise. An app-specific password can be revoked
+individually in the same screen if it leaks; note that rotating it needs no
+certificate change.
+
+### Putting them into GitHub
+
+GitHub repo → *Settings → Secrets and variables → Actions → New repository secret*, one per secret name. Nothing needs to be committed to the repo. If your account/organization already has these under a shared name, reuse them and skip this section.
+
+To verify the certificate is the right kind before pushing a tag:
+
+```bash
+security find-identity -v -p codesigning        # after importing the .p12 locally
+# → 1) ABC123... "Developer ID Application: Your Name (TEAMID)"
+```
+
+### Troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `Check signing secrets` fails listing names | That secret is empty/typoed in the repo settings |
+| Job fails with `no identity found` | The `.p12` is *Apple Development* or *Apple Distribution*, not **Developer ID Application** — the workflow prints the identities it did find |
+| `security: SecKeychainItemImport: MAC verification failed` | Wrong `MAC_CSC_KEY_PASSWORD`, or the `.p12` was exported without its private key |
+| Notarization fails with `Invalid credentials` | `APPLE_APP_SPECIFIC_PASSWORD` is an Apple ID *login* password (or was revoked). App-specific passwords are required |
+| Notarization returns `Invalid` + `The signature does not include a secure timestamp` | Not this setup — that would be a packaging bug; the workflow passes `--timestamp` via Hardened Runtime |
 
 ## License
 
