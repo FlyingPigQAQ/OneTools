@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
 ## Project Overview
 
@@ -97,6 +97,26 @@ The shared file-open dialog (`IPC.SELECT_INPUT_FILES`) takes an optional `kind: 
 ### Window chrome
 
 `titleBarStyle: 'hiddenInset'` hides the native title bar, so `src/renderer/components/layout/AppShell.tsx` renders a `dragBar` (`-webkit-app-region: drag`, 38px tall) above the sidebar/content so the window is draggable. Interactive elements within drag regions must opt out with `-webkit-app-region: no-drag`.
+
+## Git remotes (always push both)
+
+This repo is mirrored to **two remotes**. Every push must update both — never push to only one.
+
+| Remote | URL | Role |
+| --- | --- | --- |
+| `origin` | `https://cnb.cool/pigcanfly_qaq/OneTools` | Primary (CNB). Fetch/track `origin/main`. |
+| `github` | `git@github.com:FlyingPigQAQ/OneTools.git` | Mirror. |
+
+Both remotes are configured with **two `pushurl`s** (each other), so `git push`, `git push origin`, and `git push github` all update both hosts. `git push -u origin HEAD` when opening a PR does the same.
+
+If you add a third remote, add its URL as a `pushurl` on **every** existing remote as well:
+
+```bash
+git remote set-url --add --push origin <new-url>
+git remote set-url --add --push github <new-url>
+```
+
+Do not `git push --force` to only one host. After any force-with-lease, tag, or branch delete, repeat the same ref update on the other remote (or rely on the dual `pushurl` so a single command covers both).
 
 ## Packaging
 

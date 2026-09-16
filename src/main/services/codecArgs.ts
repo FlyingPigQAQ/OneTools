@@ -18,7 +18,7 @@ export function buildFfmpegArgs(inputPath: string, outputPath: string, options: 
 
 /**
  * Append the codec + audio-parameter args for the chosen format onto `args`.
- * Mirrors the per-format switch documented in CLAUDE.md — lossless formats
+ * Mirrors the per-format switch documented in AGENTS.md — lossless formats
  * (flac/wav/m4a-alac) ignore bitrate; Opus honors a VBR toggle.
  */
 export function appendCodecArgs(args: string[], options: ConversionOptions): void {
