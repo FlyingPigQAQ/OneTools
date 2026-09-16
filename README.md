@@ -38,8 +38,11 @@ The presence of an `out/` directory is **not** proof that Electron installed cor
 The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`.
 
 ```bash
-# Easiest: copy your Homebrew ffmpeg into place
+# Easiest: copy your Homebrew ffmpeg into place (local development only)
 ./scripts/download-ffmpeg.sh
+
+# For release builds: fetch a self-contained/static binary (required for notarization)
+./scripts/fetch-ffmpeg-ci.sh arm64
 ```
 
 Or download a macOS static build manually from [evermeet.cx](https://evermeet.cx/ffmpeg/) (recommended) or [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases) and place it at `resources/ffmpeg/arm64/ffmpeg`.
@@ -123,12 +126,58 @@ When adding a capability, ask first: "Is this an option of an existing tool, or 
 
 ## Packaging
 
-`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so FFmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`. Code signing/notarization config is scaffolded but not wired to real credentials — without a Developer ID certificate, `electron-builder` skips signing and the app runs unsigned.
+`electron-builder.yml` bundles `resources/ffmpeg` as `extraResources` (so FFmpeg lands at `Resources/ffmpeg/` in the `.app`), targets `dmg` + `zip`, and enables macOS Hardened Runtime with `build/entitlements.mac.plist`.
 
 ```bash
-npm run build:mac          # → dist/onetools-<version>-arm64.dmg + .zip
+npm run build:mac           # → dist/onetools-<version>-arm64.dmg + .zip
 npm run build:mac:universal # universal binary (arm64 + x64)
 ```
+
+### Code signing & notarization (CI)
+
+Releases are built on GitHub-hosted macOS runners by `.github/workflows/build-macos.yml`:
+
+- push a `v*` tag → signed + notarized build published as a GitHub Release
+- `workflow_dispatch` → manual run, signed by default (`sign` toggle)
+
+Signing is driven entirely by repository secrets (`Settings → Secrets and variables → Actions`).
+Missing secrets do **not** fail the build: it prints a warning and produces an unsigned app.
+
+| Secret | Purpose |
+| --- | --- |
+| `MAC_CSC_LINK` | base64 of the `.p12` (`base64 -i cert.p12`) or an `https://` URL to it. Must be a **Developer ID Application** certificate |
+| `MAC_CSC_KEY_PASSWORD` | password of that `.p12` |
+| `KEYCHAIN_PASSWORD` | any random string; password for the throwaway keychain the workflow creates |
+| `APPLE_ID` | Apple ID used for notarization |
+| `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
+
+The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the identity is resolved
+from the keychain, then `electron-builder` signs with Hardened Runtime and uploads the `.dmg`/`.zip`
+to Apple's notary service. The workflow then verifies the signature (`codesign --verify --deep --strict`)
+and the staple (`xcrun stapler validate`) before publishing.
+
+`mac.identity` is intentionally **not** hardcoded in `electron-builder.yml` — it resolves from
+`CSC_NAME`/`CSC_LINK` and falls back to an unsigned build when no certificate is present.
+
+### FFmpeg must be self-contained
+
+The app resolves FFmpeg at `Resources/ffmpeg/<arch>/ffmpeg`. The binary in `resources/ffmpeg/arm64/`
+is currently a **Homebrew** build that links ~17 dylibs from `/opt/homebrew` — it cannot run on a
+machine without Homebrew, and it **cannot be notarized** because those dependencies are neither
+present on the runner nor hardened.
+
+For signed releases, replace it with a static single-file build (Apple-notarized builds are available
+from [evermeet.cx](https://evermeet.cx/ffmpeg/)):
+
+```bash
+./scripts/fetch-ffmpeg-ci.sh arm64   # Apple Silicon
+./scripts/fetch-ffmpeg-ci.sh x64     # Intel (resources/ffmpeg/x64/ is currently empty)
+```
+
+Verify with `otool -L resources/ffmpeg/arm64/ffmpeg` — only `/usr/lib/...` and `/System/...`
+entries should remain. The workflow prints a `::warning::` when a bundled binary is still
+dynamically linked.
 
 ## License
 

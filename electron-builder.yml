@@ -16,8 +16,10 @@ files:
 extraResources:
   - from: resources/ffmpeg
     to: ffmpeg
+    # Only ship the binary that matches the target arch: a notarized build must
+    # not contain foreign-arch Mach-O files (and x64/ may be empty).
     filter:
-      - "**/*"
+      - "${arch}/**/*"
 
 mac:
   category: public.app-category.utilities
@@ -29,7 +31,13 @@ mac:
   entitlementsInherit: build/entitlements.mac.plist
   icon: resources/icon.icns
   gatekeeperAssess: false
-  identity:  "yao qi (A3LQYCQRTS)"
+  # Identity is resolved at build time:
+  #   - locally / in CI with a certificate: electron-builder reads CSC_NAME,
+  #     CSC_LINK + CSC_KEY_PASSWORD (see .github/workflows/build-macos.yml).
+  #   - without a certificate: CSC_IDENTITY_AUTO_DISCOVERY=false skips signing
+  #     entirely, so an unsigned build never fails on a missing identity.
+  # Never hardcode a developer name here — it overrides CI values and breaks
+  # reproducible builds.
   notarize: true
 
 dmg:
