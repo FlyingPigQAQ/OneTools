@@ -37,17 +37,22 @@ The presence of an `out/` directory is **not** proof that Electron installed cor
 
 The audio tools need a static FFmpeg binary at `resources/ffmpeg/<arch>/ffmpeg` (e.g. `resources/ffmpeg/arm64/ffmpeg`). Without it, conversions fail with `ENOENT`. `src/main/utils/paths.ts` resolves this; `ffmpegManager.ts` tries the bundled binary first, then falls back to `ffmpeg` on `$PATH`.
 
-The bundled binaries are **committed to the repository** and must be:
+Fetch both architectures plus `ffprobe` with one command:
+
+```bash
+./scripts/fetch-ffmpeg-macos.sh          # arm64 + x64, ffmpeg + ffprobe
+./scripts/fetch-ffmpeg-macos.sh arm64    # a single arch
+```
+
+The script pulls the pinned [eugeneware/ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) release (FFmpeg 6.1.1) and **verifies every file against a SHA-256 hardcoded in the script** before installing it — a mismatch aborts without touching `resources/ffmpeg/`. The binaries are deliberately **not committed** (two arches x two binaries is ~250 MB of history); `resources/ffmpeg/` is gitignored.
+
+Whatever ends up there is validated by CI and must be:
 
 - **static / self-contained** — a Homebrew ffmpeg links ~17 dylibs from `/opt/homebrew`, so it cannot run on a machine without Homebrew and **cannot be notarized**;
 - **matching the target arch** — `resources/ffmpeg/arm64/ffmpeg` (Apple Silicon) and `resources/ffmpeg/x64/ffmpeg` (Intel);
 - **signed** — electron-builder signs nested binaries with the same Developer ID during packaging.
 
-Fetch a static build manually from [evermeet.cx](https://evermeet.cx/ffmpeg/) (Apple-notarized static builds) and place it at `resources/ffmpeg/<arch>/ffmpeg`. Verify with `otool -L resources/ffmpeg/arm64/ffmpeg` — only `/usr/lib/...` and `/System/...` entries may remain.
-
-`resources/ffmpeg/x64/ffmpeg` is currently **missing**, so `--universal` / `x64` packaging cannot produce a releasable build until it is added. The workflow refuses to start signing if either binary is absent.
-
-> There is no download script. Both binaries are committed artifacts; CI validates them instead of fetching them (a network fetch at build time would make the notarized output non-reproducible).
+Verify locally with `otool -L resources/ffmpeg/arm64/ffmpeg` — only `/usr/lib/...` and `/System/...` entries may remain. Anything else will fail the CI gate.
 
 ## Scripts
 
@@ -56,6 +61,7 @@ Fetch a static build manually from [evermeet.cx](https://evermeet.cx/ffmpeg/) (A
 | `npm run dev` | Start Electron + Vite dev server with HMR (DevTools opens automatically). |
 | `npm run build` | Build main/preload/renderer via electron-vite → `out/`. |
 | `npm run build:mac` | Build + package as `.dmg`/`.zip` via electron-builder → `dist/`. |
+| `./scripts/fetch-ffmpeg-macos.sh` | Download + hash-verify the static FFmpeg/FFprobe binaries into `resources/ffmpeg/`. |
 | `npm test` | Run the Vitest unit-test suite once. |
 | `npm run test:watch` | Run Vitest in watch mode. |
 
@@ -155,7 +161,9 @@ Releases are built on GitHub-hosted macOS runners by `.github/workflows/build-ma
 | `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID |
 | `APPLE_TEAM_ID` | 10-character Apple Developer Team ID |
 
-The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the resolved identity is passed as `CSC_NAME`, and `electron-builder` re-imports the same `.p12` into its own keychain (which is what `@electron/notarize` looks the identity up in). It then signs with Hardened Runtime and submits the `.app` to Apple's notary service. The workflow verifies `codesign --verify --deep --strict` on the `.app` **and** on each bundled ffmpeg binary, then `xcrun stapler validate` + `spctl -a -t exec` before anything is uploaded. Any failure stops the run — a bad or unsigned artifact is never published.
+The certificate is imported into a temporary keychain (`CSC_KEYCHAIN`), the resolved identity is passed as `CSC_NAME`, and `electron-builder` re-imports the same `.p12` into its own keychain (which is what `@electron/notarize` looks the identity up in). It then signs with Hardened Runtime and submits the `.app` to Apple's notary service. The workflow verifies `codesign --verify --deep --strict` on the `.app` **and** on each bundled ffmpeg/ffprobe binary, then `xcrun stapler validate` + `spctl -a -t exec` before anything is uploaded. Any failure stops the run — a bad or unsigned artifact is never published.
+
+The FFmpeg binaries are fetched by the workflow itself (`./scripts/fetch-ffmpeg-macos.sh`, SHA-256-pinned) rather than committed to the repo, then verified with `otool`/`lipo`: a missing, dynamically linked or wrong-arch binary fails the build before packaging.
 
 `mac.identity` is intentionally **not** hardcoded in `electron-builder.yml`; it resolves from `CSC_NAME`/`CSC_LINK` only. `mac.forceCodeSigning: true` documents the same guarantee for local builds.
 

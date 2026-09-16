@@ -130,31 +130,25 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Prepare FFmpeg binaries
-        # The app resolves the binary at Resources/ffmpeg/<process.arch>/ffmpeg,
+      - name: Fetch static FFmpeg binaries
+        # The app resolves its binary at Resources/ffmpeg/<process.arch>/ffmpeg,
         # so each .app must ship the binary matching its own architecture.
-        # It must also be self-contained (static): a Homebrew ffmpeg links dylibs
-        # from /opt/homebrew, which are neither present on the runner nor signed,
-        # so notarization would fail. This step is a hard gate, not a warning.
+        #
+        # The binaries are NOT committed to the repo (~250 MB): this step downloads
+        # the pinned https://github.com/eugeneware/ffmpeg-static release and
+        # verifies every file against the SHA-256 hardcoded in
+        # scripts/fetch-ffmpeg-macos.sh. A hash mismatch fails the run — a tampered
+        # or silently re-tagged upstream artifact can never reach a signed build.
+        run: ./scripts/fetch-ffmpeg-macos.sh
+
+      - name: Verify FFmpeg binaries
+        # Hard gate, not a warning: a Homebrew ffmpeg links dylibs from
+        # /opt/homebrew, which are neither present on the runner nor hardened, so
+        # notarization would fail. Only /usr/lib and /System dependencies may remain.
         run: |
           set -eux
-          chmod +x resources/ffmpeg/*/ffmpeg
-          # The universal .app resolves both Resources/ffmpeg/arm64 and
-          # Resources/ffmpeg/x64 at runtime, and a signed bundle must not contain
-          # an unsigned/foreign Mach-O. Normalize to one binary per arch and make
-          # sure the arm64 build (the only one committed today) also carries x86_64
-          # — otherwise either install one universal binary or add
-          # resources/ffmpeg/x64/ffmpeg (see README "FFmpeg binary").
-          if [ -x resources/ffmpeg/arm64/ffmpeg ] && [ ! -x resources/ffmpeg/x64/ffmpeg ]; then
-            if lipo -archs resources/ffmpeg/arm64/ffmpeg | grep -qw x86_64; then
-              mkdir -p resources/ffmpeg/x64
-              cp resources/ffmpeg/arm64/ffmpeg resources/ffmpeg/x64/ffmpeg
-            else
-              echo "::error title=Missing x64 FFmpeg::resources/ffmpeg/arm64/ffmpeg is arm64-only and resources/ffmpeg/x64/ffmpeg does not exist, so an Intel/universal package would ship without FFmpeg. Commit a universal or x64 static binary."
-              exit 1
-            fi
-          fi
-          for bin in resources/ffmpeg/*/ffmpeg; do
+          chmod +x resources/ffmpeg/*/ffmpeg resources/ffmpeg/*/ffprobe
+          for bin in resources/ffmpeg/*/ffmpeg resources/ffmpeg/*/ffprobe; do
             echo "== $bin"
             otool -L "$bin"
             archs=$(lipo -archs "$bin")
@@ -266,7 +260,7 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$APP"
           codesign -dv --verbose=4 "$APP" 2>&1 | grep -E 'Authority|TeamIdentifier|Identifier'
           # A signed .app must not contain unsigned nested Mach-O binaries.
-          for bin in "$APP"/Contents/Resources/ffmpeg/*/ffmpeg; do
+          for bin in "$APP"/Contents/Resources/ffmpeg/*/ffmpeg "$APP"/Contents/Resources/ffmpeg/*/ffprobe; do
             [ -e "$bin" ] || continue
             echo "== $bin"
             codesign --verify --strict --verbose=2 "$bin"
@@ -299,7 +293,7 @@ jobs:
             arch=$(lipo -archs "$app/Contents/MacOS/OneTools")
             echo "$app -> $arch"
             for a in $arch; do
-              ls -la "$app/Contents/Resources/ffmpeg/$a/ffmpeg"
+              ls -la "$app/Contents/Resources/ffmpeg/$a/ffmpeg" "$app/Contents/Resources/ffmpeg/$a/ffprobe"
             done
           done
           [ "$found" -gt 0 ] || { echo "::error::no packaged .app found in dist/"; exit 1; }

@@ -28,5 +28,8 @@ Thumbs.db
 .env.local
 
 # Resources binaries
-resources/ffmpeg/**/*.zip
-resources/ffmpeg/**/*.tar.xz
+# The app bundles a static FFmpeg per architecture at resources/ffmpeg/<arch>/.
+# They are NOT committed (~250 MB); fetch them with
+#   ./scripts/fetch-ffmpeg-macos.sh
+# CI (.github/workflows/build-macos.yml) downloads and hash-verifies them itself.
+resources/ffmpeg/
