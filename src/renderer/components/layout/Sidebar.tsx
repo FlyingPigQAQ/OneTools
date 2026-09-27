@@ -26,6 +26,12 @@ const TOOLS = [
     name: 'Markdown to PDF',
     description: 'Render Markdown documents to PDF',
   },
+  {
+    id: 'json-formatter',
+    number: '05',
+    name: 'JSON Formatter',
+    description: 'Format, validate and minify JSON',
+  },
 ];
 
 interface SidebarProps {

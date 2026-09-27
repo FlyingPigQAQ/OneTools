@@ -4,6 +4,7 @@ import AudioConverter from './components/tools/AudioConverter/AudioConverter';
 import AudioSplitter from './components/tools/AudioSplitter/AudioSplitter';
 import VoiceRecorder from './components/tools/VoiceRecorder/VoiceRecorder';
 import MarkdownPdf from './components/tools/MarkdownPdf/MarkdownPdf';
+import JsonFormatter from './components/tools/JsonFormatter/JsonFormatter';
 import { useAppStore } from './store/appStore';
 
 const TOOL_COMPONENTS: Record<string, React.ComponentType> = {
@@ -11,6 +12,7 @@ const TOOL_COMPONENTS: Record<string, React.ComponentType> = {
   'audio-splitter': AudioSplitter,
   'voice-recorder': VoiceRecorder,
   'markdown-pdf': MarkdownPdf,
+  'json-formatter': JsonFormatter,
 };
 
 function App() {
