@@ -85,13 +85,6 @@ export interface SplitJob {
   error?: string;
 }
 
-export interface ToolDefinition {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-}
-
 /**
  * Markdown → PDF conversion. A separate tool from the audio tools: it renders a
  * Markdown document to a styled PDF via Electron's bundled Chromium
@@ -228,7 +221,7 @@ export interface ElectronAPI {
   stopRecording(): Promise<RecordingResult>;
   getRecordingState(): Promise<RecordingState>;
   deleteRecording(filePath: string): Promise<boolean>;
-  readAudioFile(filePath: string): Promise<Uint8Array>;
+  readAudioFile(filePath: string): Promise<Uint8Array<ArrayBuffer>>;
   onRecordingTick(callback: (data: RecordingTickData) => void): () => void;
   onRecordingStopped(callback: (data: RecordingResult) => void): () => void;
   onRecordingError(callback: (data: { jobId: string; error: string }) => void): () => void;

@@ -1,19 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import AppShell from './components/layout/AppShell';
-import AudioConverter from './components/tools/AudioConverter/AudioConverter';
-import AudioSplitter from './components/tools/AudioSplitter/AudioSplitter';
-import VoiceRecorder from './components/tools/VoiceRecorder/VoiceRecorder';
-import MarkdownPdf from './components/tools/MarkdownPdf/MarkdownPdf';
-import JsonFormatter from './components/tools/JsonFormatter/JsonFormatter';
+import { getToolById } from './toolRegistry';
 import { useAppStore } from './store/appStore';
-
-const TOOL_COMPONENTS: Record<string, React.ComponentType> = {
-  'audio-converter': AudioConverter,
-  'audio-splitter': AudioSplitter,
-  'voice-recorder': VoiceRecorder,
-  'markdown-pdf': MarkdownPdf,
-  'json-formatter': JsonFormatter,
-};
 
 function App() {
   const { activeTool } = useAppStore();
@@ -47,7 +35,7 @@ function App() {
     return () => clearTimeout(timeout);
   }, [activeTool]);
 
-  const ToolComponent = TOOL_COMPONENTS[displayedTool];
+  const ToolComponent = getToolById(displayedTool)?.component;
 
   return (
     <AppShell>
