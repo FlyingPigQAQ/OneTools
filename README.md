@@ -122,7 +122,9 @@ Output files are named `<baseName>_part000.<ext>`, `_part001`, …
 
 ### Adding a new tool
 
-The sidebar (`src/renderer/components/layout/Sidebar.tsx`) currently hardcodes its tool list rather than reading `src/main/services/toolRegistry.ts`, and `App.tsx` switches on `activeTool` from `src/renderer/store/appStore.ts`. Adding a new tool means: a component under `src/renderer/components/tools/<ToolName>/`, an entry in the sidebar, a branch in `App.tsx`, and IPC handlers in `src/main/ipc/` (registered in `src/main/ipc/index.ts`) if it needs native access. Give it its own hook, Zustand store, and service — do **not** fold it into an existing tool (see the design principle below).
+The tool list lives in one place: `src/renderer/toolRegistry.tsx`. The sidebar and the `App.tsx` content area both render from it, so adding a tool means: a component under `src/renderer/components/tools/<ToolName>/`, one entry in `TOOL_REGISTRY`, and IPC handlers in `src/main/ipc/` (registered in `src/main/ipc/index.ts`) if it needs native access. Give it its own hook, Zustand store, and service — do **not** fold it into an existing tool (see the design principle below).
+
+ffmpeg-backed tools reuse `useFfmpegJob` (`src/renderer/hooks/useFfmpegJob.ts`) for the job lifecycle (FFmpeg check, progress/complete/error events, queue, retry, cancel, reveal-in-Finder) and `createJobStore` (`src/renderer/store/jobStore.ts`) for the store actions. A tool hook then only declares its IPC channels, job-id prefix, execution mode (`parallel`/`sequential`), and its option builder — see `useAudioConverter.ts` and `useAudioSplitter.ts` as the two reference shapes.
 
 ## Design principle: one tool = one responsibility
 

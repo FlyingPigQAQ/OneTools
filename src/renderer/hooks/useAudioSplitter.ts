@@ -1,114 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 import { useSplitStore } from '../store/splitStore';
-import type { SplitJob, SplitOptions, SplitMode, ProgressData } from '@shared/types';
-
-let jobIdCounter = 0;
+import { useFfmpegJob } from './useFfmpegJob';
+import type { SplitJob, SplitOptions, SplitMode } from '@shared/types';
 
 export function useAudioSplitter() {
-  const [isSplitting, setIsSplitting] = useState(false);
-  const [ffmpegReady, setFfmpegReady] = useState<boolean | null>(null);
-  const listenersRef = useRef<(() => void)[]>([]);
-
-  const { jobs, addJobs, updateJobStatus, removeJob } = useSplitStore();
-
-  useEffect(() => {
-    window.electronAPI.checkFFmpeg().then((status) => {
-      setFfmpegReady(status.available);
-    });
-
-    const removeProgress = window.electronAPI.onConversionProgress((data: ProgressData) => {
-      updateJobStatus(data.jobId, 'converting', data.progress);
-    });
-
-    const removeComplete = window.electronAPI.onSplitComplete((data) => {
-      updateJobStatus(data.jobId, 'completed', 100);
-    });
-
-    const removeError = window.electronAPI.onSplitError((data) => {
-      updateJobStatus(data.jobId, 'error', undefined, data.error);
-    });
-
-    listenersRef.current = [removeProgress, removeComplete, removeError];
-
-    return () => {
-      listenersRef.current.forEach((remove) => remove());
-    };
-  }, [updateJobStatus]);
-
-  const addFiles = useCallback(
-    async (filePaths: string[], options: SplitOptions) => {
-      const newJobs: SplitJob[] = filePaths.map((path) => ({
-        id: `split-${++jobIdCounter}`,
-        inputPath: path,
-        fileName: path.split('/').pop() || path,
-        options,
-        status: 'pending',
-        progress: 0,
-      }));
-      addJobs(newJobs);
-      return newJobs;
+  const ffmpegJob = useFfmpegJob<SplitJob>({
+    useStore: useSplitStore,
+    idPrefix: 'split',
+    startJob: (job) => window.electronAPI.startSplit(job),
+    cancelJob: (jobId) => window.electronAPI.cancelSplit(jobId),
+    events: {
+      // Split progress reuses the shared conversion progress channel.
+      onProgress: (cb) => window.electronAPI.onConversionProgress(cb),
+      onComplete: (cb) => window.electronAPI.onSplitComplete(cb),
+      onError: (cb) => window.electronAPI.onSplitError(cb),
     },
-    [addJobs]
-  );
-
-  const startSplit = useCallback(
-    async (options?: SplitOptions) => {
-      const pending = useSplitStore.getState().jobs.filter((j) => j.status === 'pending');
-      if (pending.length === 0) return;
-
-      setIsSplitting(true);
-
-      for (const job of pending) {
-        const jobWithOptions = options ? { ...job, options } : job;
-        updateJobStatus(job.id, 'converting', 0);
-        try {
-          await window.electronAPI.startSplit(jobWithOptions);
-        } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'Split failed';
-          updateJobStatus(job.id, 'error', undefined, errorMsg);
-        }
-      }
-
-      setIsSplitting(false);
-    },
-    [updateJobStatus]
-  );
-
-  const cancelJob = useCallback(
-    async (jobId: string) => {
-      await window.electronAPI.cancelSplit(jobId);
-      updateJobStatus(jobId, 'cancelled');
-    },
-    [updateJobStatus]
-  );
-
-  /** Retry a single failed split job. */
-  const retryJob = useCallback(
-    async (jobId: string) => {
-      const job = useSplitStore.getState().jobs.find((j) => j.id === jobId);
-      if (!job) return;
-      updateJobStatus(jobId, 'converting', 0);
-      setIsSplitting(true);
-      try {
-        await window.electronAPI.startSplit({ ...job, status: 'pending', progress: 0 });
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Split failed';
-        updateJobStatus(jobId, 'error', undefined, errorMsg);
-      }
-      setIsSplitting(false);
-    },
-    [updateJobStatus]
-  );
-
-  /** Reveal a split job's output folder in Finder. */
-  const revealInFinder = useCallback(async (jobId: string) => {
-    const job = useSplitStore.getState().jobs.find((j) => j.id === jobId);
-    if (!job) return;
-    const dir = job.options.outputDir || job.inputPath.substring(0, job.inputPath.lastIndexOf('/'));
-    if (dir) {
-      await window.electronAPI.revealInFinder(dir);
-    }
-  }, []);
+    errorLabel: 'Split',
+    execution: 'sequential',
+    createJob: (inputPath, options, id) => ({
+      id,
+      inputPath,
+      fileName: inputPath.split('/').pop() || inputPath,
+      options,
+      status: 'pending',
+      progress: 0,
+    }),
+  });
 
   const buildOptions = useCallback(
     (mode: SplitMode, sizeMB: number, durationSec: number, outputDir: string): SplitOptions => {
@@ -123,15 +40,15 @@ export function useAudioSplitter() {
   );
 
   return {
-    jobs,
-    isSplitting,
-    ffmpegReady,
-    addFiles,
-    startSplit,
-    retryJob,
-    cancelJob,
-    removeJob,
-    revealInFinder,
+    jobs: ffmpegJob.jobs,
+    isSplitting: ffmpegJob.isRunning,
+    ffmpegReady: ffmpegJob.ffmpegReady,
+    addFiles: ffmpegJob.addFiles,
+    startSplit: ffmpegJob.start,
+    retryJob: ffmpegJob.retryJob,
+    cancelJob: ffmpegJob.cancelJob,
+    removeJob: ffmpegJob.removeJob,
+    revealInFinder: ffmpegJob.revealInFinder,
     buildOptions,
   };
 }

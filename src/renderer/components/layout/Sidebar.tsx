@@ -1,32 +1,6 @@
 import { useAppStore } from '../../store/appStore';
+import { TOOL_REGISTRY } from '../../toolRegistry';
 import styles from './Sidebar.module.css';
-
-const TOOLS = [
-  {
-    id: 'audio-converter',
-    number: '01',
-    name: 'Audio Converter',
-    description: 'Convert audio files between formats',
-  },
-  {
-    id: 'audio-splitter',
-    number: '02',
-    name: 'Audio Splitter',
-    description: 'Split audio into parts by size or duration',
-  },
-  {
-    id: 'voice-recorder',
-    number: '03',
-    name: 'Voice Recorder',
-    description: 'Record audio from your microphone',
-  },
-  {
-    id: 'markdown-pdf',
-    number: '04',
-    name: 'Markdown to PDF',
-    description: 'Render Markdown documents to PDF',
-  },
-];
 
 interface SidebarProps {
   width: number;
@@ -46,14 +20,14 @@ function Sidebar({ width }: SidebarProps) {
 
       <nav className={styles.nav}>
         <p className={styles.sectionLabel}>Contents</p>
-        {TOOLS.map((tool) => (
+        {TOOL_REGISTRY.map((tool, index) => (
           <button
             key={tool.id}
             className={`${styles.toolButton} ${activeTool === tool.id ? styles.active : ''}`}
             onClick={() => setActiveTool(tool.id)}
             title={tool.description}
           >
-            <span className={styles.number}>{tool.number}</span>
+            <span className={styles.number}>{String(index + 1).padStart(2, '0')}</span>
             <div className={styles.entry}>
               <span className={styles.label}>{tool.name}</span>
               <span className={styles.desc}>{tool.description}</span>
