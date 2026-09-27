@@ -3,6 +3,7 @@ import AudioConverter from './components/tools/AudioConverter/AudioConverter';
 import AudioSplitter from './components/tools/AudioSplitter/AudioSplitter';
 import VoiceRecorder from './components/tools/VoiceRecorder/VoiceRecorder';
 import MarkdownPdf from './components/tools/MarkdownPdf/MarkdownPdf';
+import JsonFormatter from './components/tools/JsonFormatter/JsonFormatter';
 
 export interface ToolEntry {
   id: string;
@@ -40,6 +41,12 @@ export const TOOL_REGISTRY: ToolEntry[] = [
     name: 'Markdown to PDF',
     description: 'Render Markdown documents to PDF',
     component: MarkdownPdf,
+  },
+  {
+    id: 'json-formatter',
+    name: 'JSON Formatter',
+    description: 'Format, validate and minify JSON',
+    component: JsonFormatter,
   },
 ];
 

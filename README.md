@@ -6,6 +6,7 @@ Current tools:
 
 - **Audio Converter** — change an audio file's format (MP3, AAC, FLAC, WAV, OGG, Opus, ALAC/M4A) with control over bitrate, sample rate, channels, and Opus VBR. Batch convert with bounded concurrency.
 - **Audio Splitter** — cut one audio file into multiple parts by target size (MB) or duration (seconds), without re-encoding (stream copy, preserves the source codec).
+- **JSON Formatter** — format, validate, minify and escape/unescape JSON entirely offline, with live validation (line/column error reporting), indent options (2/4/tab), and document stats (bytes, lines, keys, depth). Pure renderer tool — no IPC involved.
 
 Conversion and splitting are deliberately **separate tools** — a user who wants to split doesn't also want to re-encode, and vice versa. They share FFmpeg infrastructure but have their own components, services, IPC channels, and stores.
 
