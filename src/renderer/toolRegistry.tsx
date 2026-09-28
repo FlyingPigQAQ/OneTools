@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import type { MessageKey } from '@shared/i18n';
 import AudioConverter from './components/tools/AudioConverter/AudioConverter';
 import AudioSplitter from './components/tools/AudioSplitter/AudioSplitter';
 import VoiceRecorder from './components/tools/VoiceRecorder/VoiceRecorder';
@@ -7,8 +8,8 @@ import JsonFormatter from './components/tools/JsonFormatter/JsonFormatter';
 
 export interface ToolEntry {
   id: string;
-  name: string;
-  description: string;
+  name: MessageKey;
+  description: MessageKey;
   component: ComponentType;
 }
 
@@ -20,32 +21,32 @@ export interface ToolEntry {
 export const TOOL_REGISTRY: ToolEntry[] = [
   {
     id: 'audio-converter',
-    name: 'Audio Converter',
-    description: 'Convert audio files between formats',
+    name: 'tools.audioConverter.name',
+    description: 'tools.audioConverter.description',
     component: AudioConverter,
   },
   {
     id: 'audio-splitter',
-    name: 'Audio Splitter',
-    description: 'Split audio into parts by size or duration',
+    name: 'tools.audioSplitter.name',
+    description: 'tools.audioSplitter.description',
     component: AudioSplitter,
   },
   {
     id: 'voice-recorder',
-    name: 'Voice Recorder',
-    description: 'Record audio from your microphone',
+    name: 'tools.voiceRecorder.name',
+    description: 'tools.voiceRecorder.description',
     component: VoiceRecorder,
   },
   {
     id: 'markdown-pdf',
-    name: 'Markdown to PDF',
-    description: 'Render Markdown documents to PDF',
+    name: 'tools.markdownPdf.name',
+    description: 'tools.markdownPdf.description',
     component: MarkdownPdf,
   },
   {
     id: 'json-formatter',
-    name: 'JSON Formatter',
-    description: 'Format, validate and minify JSON',
+    name: 'tools.jsonFormatter.name',
+    description: 'tools.jsonFormatter.description',
     component: JsonFormatter,
   },
 ];

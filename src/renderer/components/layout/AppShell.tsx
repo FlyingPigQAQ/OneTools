@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import Sidebar from './Sidebar';
+import { useI18n } from '../../hooks/useI18n';
 import { useAppStore } from '../../store/appStore';
 import styles from './AppShell.module.css';
 
@@ -10,6 +11,7 @@ interface AppShellProps {
 }
 
 function AppShell({ children }: AppShellProps) {
+  const { t } = useI18n();
   const {
     sidebarWidth,
     sidebarCollapsed,
@@ -64,7 +66,7 @@ function AppShell({ children }: AppShellProps) {
               className={styles.resizer}
               onMouseDown={onMouseDown}
               onDoubleClick={collapseSidebar}
-              title="Drag to resize · Double-click to hide"
+              title={t('shell.resize')}
             />
           </>
         )}
@@ -72,8 +74,8 @@ function AppShell({ children }: AppShellProps) {
           <button
             className={styles.expandBtn}
             onClick={expandSidebar}
-            title="Show sidebar"
-            aria-label="Show sidebar"
+            title={t('shell.showSidebar')}
+            aria-label={t('shell.showSidebar')}
           >
             ▶
           </button>

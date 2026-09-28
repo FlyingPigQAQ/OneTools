@@ -163,3 +163,26 @@
   margin-top: var(--spacing-sm);
   line-height: 1.4;
 }
+
+.langRow {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.langBtn {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-caption);
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.langBtnActive {
+  color: var(--color-accent);
+}
