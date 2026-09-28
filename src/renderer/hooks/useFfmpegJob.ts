@@ -54,6 +54,12 @@ export interface FfmpegJobConfig<TJob extends BaseJob & { options: unknown }> {
   dedupeInputs?: boolean;
   /** Build a job from a dropped/picked file path. */
   createJob: (inputPath: string, options: TJob['options'], id: string) => TJob;
+  /**
+   * Optional custom reveal for the 🔍 action. Defaults to opening the output
+   * directory (or the input's directory) — tools whose jobs track a concrete
+   * output file pass their own to reveal that file instead.
+   */
+  revealJob?: (job: TJob) => Promise<void> | void;
 }
 
 /**
@@ -91,6 +97,10 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
       useStore.getState().updateJobStatus(data.jobId, 'completed', 100);
     });
     const removeError = events.onError((data) => {
+      // A cancel kills the ffmpeg process, which surfaces as a failure. The
+      // renderer has already marked the job cancelled — don't flip it back.
+      const job = useStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       useStore.getState().updateJobStatus(data.jobId, 'error', undefined, data.error);
     });
 
@@ -184,6 +194,11 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
   const revealInFinder = useCallback(async (jobId: string) => {
     const job = configRef.current.useStore.getState().jobs.find((j) => j.id === jobId);
     if (!job) return;
+    const custom = configRef.current.revealJob;
+    if (custom) {
+      await custom(job);
+      return;
+    }
     const options = job.options as { outputDir?: string };
     const dir = options.outputDir || job.inputPath.substring(0, job.inputPath.lastIndexOf('/'));
     if (dir) {

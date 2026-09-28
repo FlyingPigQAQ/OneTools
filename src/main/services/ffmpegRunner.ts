@@ -20,10 +20,13 @@ export function runFfmpeg(
   onProgress: (data: ProgressData) => void,
   args: string[],
   computePercent: (outTimeMs: number) => number,
-  progressEvent: string = IPC_EVENTS.CONVERSION_PROGRESS
+  progressEvent: string = IPC_EVENTS.CONVERSION_PROGRESS,
+  /** Receives the spawned process so the caller can keep it for cancellation. */
+  onSpawn?: (proc: ReturnType<typeof spawn>) => void
 ): Promise<{ success: boolean; error?: AppError }> {
   return new Promise((resolve) => {
     const proc = ffmpegManager.spawn(args);
+    onSpawn?.(proc);
 
     let outputBuffer = '';
     let currentOutTimeMs = 0;

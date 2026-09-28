@@ -15,6 +15,10 @@ export const IPC = {
   START_MD_PDF: 'mdpdf:start',
   CANCEL_MD_PDF: 'mdpdf:cancel',
 
+  // Image processing (compress + watermark)
+  START_IMAGE: 'image:start',
+  CANCEL_IMAGE: 'image:cancel',
+
   // Voice Recorder
   START_RECORDING: 'voice-recorder:start',
   STOP_RECORDING: 'voice-recorder:stop',
@@ -48,6 +52,9 @@ export const IPC_EVENTS = {
   MD_PDF_PROGRESS: 'mdpdf:progress',
   MD_PDF_COMPLETE: 'mdpdf:complete',
   MD_PDF_ERROR: 'mdpdf:error',
+  IMAGE_PROGRESS: 'image:progress',
+  IMAGE_COMPLETE: 'image:complete',
+  IMAGE_ERROR: 'image:error',
   RECORDING_TICK: 'voice-recorder:tick',
   RECORDING_STOPPED: 'voice-recorder:stopped',
   RECORDING_ERROR: 'voice-recorder:error',

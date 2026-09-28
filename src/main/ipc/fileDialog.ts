@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron';
 import { IPC } from '@shared/constants';
 import { t } from '@shared/i18n';
 import { MARKDOWN_EXTENSIONS } from '@shared/markdown';
+import { IMAGE_INPUT_EXTENSIONS } from '@shared/imageFormats';
 import { getLocale } from '../services/locale';
 
 let registered = false;
@@ -12,8 +13,8 @@ export function registerFileDialogIpc(): void {
 
   // `kind` selects the filter set shown in the open dialog. Defaults to audio
   // so the existing audio tools, which call this with no argument, are
-  // unaffected. Markdown → PDF passes 'markdown'.
-  ipcMain.handle(IPC.SELECT_INPUT_FILES, async (_event, kind?: 'audio' | 'markdown') => {
+  // unaffected. Markdown → PDF passes 'markdown', the image tool passes 'image'.
+  ipcMain.handle(IPC.SELECT_INPUT_FILES, async (_event, kind?: 'audio' | 'markdown' | 'image') => {
     const audioFilters = [
       {
         name: t(getLocale(), 'dialogs.audioFiles'),
@@ -25,9 +26,15 @@ export function registerFileDialogIpc(): void {
       { name: t(getLocale(), 'dialogs.markdownFiles'), extensions: MARKDOWN_EXTENSIONS },
       { name: t(getLocale(), 'dialogs.allFiles'), extensions: ['*'] },
     ];
+    const imageFilters = [
+      { name: t(getLocale(), 'dialogs.imageFiles'), extensions: IMAGE_INPUT_EXTENSIONS },
+      { name: t(getLocale(), 'dialogs.allFiles'), extensions: ['*'] },
+    ];
+    const filters =
+      kind === 'markdown' ? markdownFilters : kind === 'image' ? imageFilters : audioFilters;
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
-      filters: kind === 'markdown' ? markdownFilters : audioFilters,
+      filters,
     });
     return result.canceled ? [] : result.filePaths;
   });

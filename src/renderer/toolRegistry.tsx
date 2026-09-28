@@ -5,6 +5,7 @@ import AudioSplitter from './components/tools/AudioSplitter/AudioSplitter';
 import VoiceRecorder from './components/tools/VoiceRecorder/VoiceRecorder';
 import MarkdownPdf from './components/tools/MarkdownPdf/MarkdownPdf';
 import JsonFormatter from './components/tools/JsonFormatter/JsonFormatter';
+import ImageProcessor from './components/tools/ImageProcessor/ImageProcessor';
 
 export interface ToolEntry {
   id: string;
@@ -48,6 +49,12 @@ export const TOOL_REGISTRY: ToolEntry[] = [
     name: 'tools.jsonFormatter.name',
     description: 'tools.jsonFormatter.description',
     component: JsonFormatter,
+  },
+  {
+    id: 'image-processor',
+    name: 'tools.imageProcessor.name',
+    description: 'tools.imageProcessor.description',
+    component: ImageProcessor,
   },
 ];
 

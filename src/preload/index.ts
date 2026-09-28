@@ -4,6 +4,8 @@ import type {
   ConversionJob,
   SplitJob,
   MarkdownPdfJob,
+  ImageJob,
+  ImageResult,
   ProgressData,
   ConversionResult,
   RecordingOptions,
@@ -26,7 +28,7 @@ const api: ElectronAPI = {
     return () => ipcRenderer.removeListener(IPC_EVENTS.LOCALE_CHANGED, handler);
   },
 
-  selectInputFiles: (kind?: 'audio' | 'markdown') =>
+  selectInputFiles: (kind?: 'audio' | 'markdown' | 'image') =>
     ipcRenderer.invoke(IPC.SELECT_INPUT_FILES, kind),
   selectOutputDir: () => ipcRenderer.invoke(IPC.SELECT_OUTPUT_DIR),
 
@@ -41,6 +43,9 @@ const api: ElectronAPI = {
 
   startMarkdownPdf: (job: MarkdownPdfJob) => ipcRenderer.invoke(IPC.START_MD_PDF, job),
   cancelMarkdownPdf: (jobId: string) => ipcRenderer.invoke(IPC.CANCEL_MD_PDF, jobId),
+
+  startImageJob: (job: ImageJob) => ipcRenderer.invoke(IPC.START_IMAGE, job),
+  cancelImageJob: (jobId: string) => ipcRenderer.invoke(IPC.CANCEL_IMAGE, jobId),
 
   onConversionProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: ProgressData) => callback(data);
@@ -88,6 +93,25 @@ const api: ElectronAPI = {
     const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
     ipcRenderer.on(IPC_EVENTS.MD_PDF_ERROR, handler);
     return () => ipcRenderer.removeListener(IPC_EVENTS.MD_PDF_ERROR, handler);
+  },
+
+  // Image processing
+  onImageProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ProgressData) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.IMAGE_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.IMAGE_PROGRESS, handler);
+  },
+
+  onImageComplete: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ImageResult) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.IMAGE_COMPLETE, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.IMAGE_COMPLETE, handler);
+  },
+
+  onImageError: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: ConversionResult) => callback(data);
+    ipcRenderer.on(IPC_EVENTS.IMAGE_ERROR, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.IMAGE_ERROR, handler);
   },
 
   // Voice Recorder

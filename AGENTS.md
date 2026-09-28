@@ -4,7 +4,7 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Project Overview
 
-OneTools is a macOS desktop utility app built with Electron, React, and TypeScript. It is designed as a **toolset** — each feature is a self-contained "tool" registered in a registry, so new utilities can be added without modifying the app shell. Current tools: an audio format converter and an audio splitter (both powered by FFmpeg), and a Markdown-to-PDF renderer (powered by Electron's bundled Chromium — no external binary).
+OneTools is a macOS desktop utility app built with Electron, React, and TypeScript. It is designed as a **toolset** — each feature is a self-contained "tool" registered in a registry, so new utilities can be added without modifying the app shell. Current tools: an audio format converter and an audio splitter (both powered by FFmpeg), a voice recorder, a Markdown-to-PDF renderer (powered by Electron's bundled Chromium — no external binary), a JSON formatter (pure renderer), and an image processor (compress + watermark, powered by FFmpeg).
 
 ## Design Principle: one tool = one responsibility (do not merge tools)
 
@@ -88,7 +88,19 @@ A **separate** tool from the audio tools (see Design Principle above). Renders a
 4. Progress is coarse (5/20/35/60/85/100 — read → render → load → print → write), sent on its own `MD_PDF_*` IPC channels. Cancel destroys the hidden render window (which rejects `printToPDF`); a `cancelledJobs` set suppresses the resulting error so the job stays `cancelled` rather than flipping to `error`.
 5. Uses its own `MD_PDF_*` IPC channels, `src/renderer/store/markdownPdfStore.ts`, hook `useMarkdownPdf.ts`, and UI under `src/renderer/components/tools/MarkdownPdf/`. `marked` is a runtime dependency (externalized by `externalizeDepsPlugin`, packed into the app by electron-builder).
 
-The shared file-open dialog (`IPC.SELECT_INPUT_FILES`) takes an optional `kind: 'audio' | 'markdown'` argument so the markdown tool gets Markdown filters while audio callers (which pass nothing) are unaffected. Drag-and-drop filtering is generalized similarly: `useFileDrop(onFilesDrop, extensions?)` defaults to the audio extensions. `DropZone` takes optional `icon`/`label`/`formats` props (defaults to the audio wording).
+### Image processing tool (compress + watermark)
+
+A **separate** tool from the audio tools (see Design Principle above). Shrinks images (optional downscale + quality) and optionally stamps a text or logo watermark — both applied in **one** ffmpeg run, so there is no intermediate file. Compression and watermarking are options of this one tool rather than two tools (the owner's call, recorded here so it isn't "fixed" later).
+
+1. Renderer (`src/renderer/hooks/useImageProcessor.ts`) → `window.electronAPI.startImageJob(job)`.
+2. Main (`src/main/ipc/imageProcessor.ts`) → `src/main/services/imageProcessor.ts`.
+3. `buildImageArgs()` in **`src/main/utils/imageArgs.ts`** is the pure, heavily tested arg builder: base chain (`scale=w='min(iw,N)'…:force_original_aspect_ratio=decrease` → `drawtext`) → encoder args (`-c:v mjpeg -q:v <2..31>` / `png` / `libwebp -quality`) → `-frames:v 1 -update 1`. A logo watermark needs a second input, so it switches to `-filter_complex` + an explicit `-map [out]`.
+4. **Two traps encoded in that file** (both verified against the bundled ffmpeg 6.0, and covered by `imageArgs.test.ts`): `drawtext` measures *text* with `tw`/`th` while `w`/`h` are the *input image's* size (`watermarkXY(position, margin, forText)` picks the right vocabulary); and `scale2ref` does **not** preserve the logo's aspect — the logo target width is computed in JS from a probed input width (`getImageWidth()`, ffprobe → `ffmpeg -i` stderr fallback) and passed to a plain `scale=w=<px>:h=-1`.
+5. Watermark **text never goes through the filtergraph parser**: it is written to a temp file and passed as `textfile=…:expansion=none`, so quotes/colons/commas/`%` in user text need no escaping. Font is resolved at runtime from `src/main/utils/fonts.ts` — a list where **every CJK-capable font precedes the Latin-only fallbacks** (PingFang → Hiragino Sans GB → STHeiti → Arial Unicode … → Helvetica), because `resolveFontFile()` returns the first *existing* entry and a Latin-only pick renders Chinese as tofu boxes (PingFang.ttc is missing on newer macOS). Delete the temp file in `finally`.
+6. Image jobs finish in milliseconds, so progress is a flat 100% on `IMAGE_PROGRESS`; the real signal is `IMAGE_COMPLETE`, which carries `outputPath` + `inputSize`/`outputSize` for the "1.2 MB → 340 KB (−72%)" line in `ImageQueue`.
+7. Uses its own `IMAGE_*` IPC channels, `src/renderer/store/imageStore.ts` (a `createJobStore` + `updateJobResult`), hook `useImageProcessor.ts`, and UI under `src/renderer/components/tools/ImageProcessor/`.
+
+The shared file-open dialog (`IPC.SELECT_INPUT_FILES`) takes an optional `kind: 'audio' | 'markdown' | 'image'` argument so the markdown and image tools get their own filters while audio callers (which pass nothing) are unaffected. Drag-and-drop filtering is generalized similarly: `useFileDrop(onFilesDrop, extensions?)` defaults to the audio extensions (the image tool passes `IMAGE_INPUT_EXTENSIONS` from `src/shared/imageFormats.ts`). `DropZone` takes optional `icon`/`label`/`formats` props (defaults to the audio wording).
 
 ### Tool registry (extensibility pattern)
 
