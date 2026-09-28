@@ -27,10 +27,17 @@ export function useMarkdownPdf() {
 
   useEffect(() => {
     const removeProgress = window.electronAPI.onMarkdownPdfProgress((data: ProgressData) => {
+      // Ignore events that were already in flight when the user cancelled.
+      const job = useMarkdownPdfStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       updateJobStatus(data.jobId, 'converting', data.progress);
     });
 
     const removeComplete = window.electronAPI.onMarkdownPdfComplete((data) => {
+      // A cancel that raced the conversion's completion must not flip the job
+      // back to 'completed'.
+      const job = useMarkdownPdfStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       const outputFileName = data.outputPath
         ? data.outputPath.split('/').pop() || data.outputPath
         : undefined;
@@ -38,6 +45,8 @@ export function useMarkdownPdf() {
     });
 
     const removeError = window.electronAPI.onMarkdownPdfError((data) => {
+      const job = useMarkdownPdfStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       updateJobStatus(data.jobId, 'error', undefined, data.error);
     });
 
@@ -74,6 +83,10 @@ export function useMarkdownPdf() {
       setIsConverting(true);
 
       for (const job of pending) {
+        // Re-read the status: the user may have cancelled while earlier jobs
+        // in this batch were running.
+        const current = useMarkdownPdfStore.getState().jobs.find((j) => j.id === job.id);
+        if (current?.status === 'cancelled') continue;
         const jobWithOptions = options ? { ...job, options } : job;
         updateJobStatus(job.id, 'converting', 0);
         try {

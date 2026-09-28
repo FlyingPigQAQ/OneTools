@@ -91,9 +91,16 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
 
     const { events, useStore } = configRef.current;
     const removeProgress = events.onProgress((data) => {
+      // A progress event already in flight when the user cancels must not
+      // move a cancelled job back to 'converting'.
+      const job = useStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       useStore.getState().updateJobStatus(data.jobId, 'converting', data.progress);
     });
     const removeComplete = events.onComplete((data) => {
+      // A cancel that raced the job's completion must not flip it back.
+      const job = useStore.getState().jobs.find((j) => j.id === data.jobId);
+      if (job?.status === 'cancelled') return;
       useStore.getState().updateJobStatus(data.jobId, 'completed', 100);
     });
     const removeError = events.onError((data) => {
@@ -144,6 +151,10 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
       }
 
       const runJob = async (job: TJob) => {
+        // Re-read the status: the user may have cancelled this job (or the
+        // whole batch) while earlier jobs were running.
+        const current = configRef.current.useStore.getState().jobs.find((j) => j.id === job.id);
+        if (current?.status === 'cancelled') return;
         updateJobStatus(job.id, 'converting', 0);
         try {
           await configRef.current.startJob(job);

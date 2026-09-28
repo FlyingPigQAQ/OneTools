@@ -11,6 +11,7 @@ import type {
 } from '@shared/types';
 import { renderMarkdownDocument } from '../utils/markdownRender';
 import { resolveUniqueOutputPath } from '../utils/outputPath';
+import { removeQuietly } from '../utils/files';
 
 /**
  * Markdown → PDF tool. Renders a Markdown file to a themed PDF using the main
@@ -24,8 +25,29 @@ export class MarkdownPdfConverter {
   private activeWindows = new Map<string, BrowserWindow>();
   /** Job ids cancelled by the user; suppresses the spurious error a cancel raises. */
   private cancelledJobs = new Set<string>();
+  /** Job ids currently inside convert(), so cancel is recorded before a window exists. */
+  private inFlight = new Set<string>();
 
   async convert(
+    job: MarkdownPdfJob,
+    mainWindow: BrowserWindow,
+    onProgress: (data: ProgressData) => void
+  ): Promise<void> {
+    // Register in-flight up front so cancel() is honoured while the file is
+    // still being read/rendered, before any hidden window exists.
+    this.inFlight.add(job.id);
+    try {
+      await this.runConvert(job, mainWindow, onProgress);
+    } finally {
+      this.inFlight.delete(job.id);
+      this.activeWindows.delete(job.id);
+      // Never leave a cancel intent behind: a retry reuses the job id, and a
+      // stale entry would swallow that run's real error.
+      this.cancelledJobs.delete(job.id);
+    }
+  }
+
+  private async runConvert(
     job: MarkdownPdfJob,
     mainWindow: BrowserWindow,
     onProgress: (data: ProgressData) => void
@@ -67,6 +89,13 @@ export class MarkdownPdfConverter {
       });
       this.activeWindows.set(job.id, win);
 
+      // Cancelled while reading/rendering — before the window existed. Honour
+      // it now rather than printing a PDF the user already asked not to make.
+      if (this.cancelledJobs.has(job.id)) {
+        this.destroyWindow(job.id);
+        return;
+      }
+
       const dataUrl = 'data:text/html;base64,' + Buffer.from(html, 'utf-8').toString('base64');
 
       await new Promise<void>((resolve, reject) => {
@@ -81,6 +110,11 @@ export class MarkdownPdfConverter {
             };
             reject(appError);
           }
+        );
+        // A cancel destroys the window, which never settles did-finish-load —
+        // without this the job would hang forever.
+        win.once('closed', () =>
+          reject({ key: 'errors.operationFailed', detail: 'Render window closed' } satisfies AppError)
         );
         win.loadURL(dataUrl).catch(reject);
       });
@@ -103,6 +137,13 @@ export class MarkdownPdfConverter {
       }
 
       await writeFile(outputPath, pdf);
+
+      if (this.cancelledJobs.has(job.id)) {
+        // Cancelled while writing: drop the PDF instead of leaving an output
+        // the user asked not to produce.
+        removeQuietly(outputPath);
+        return;
+      }
 
       // Cleanup the render window.
       this.destroyWindow(job.id);
@@ -138,13 +179,12 @@ export class MarkdownPdfConverter {
   }
 
   cancel(jobId: string): boolean {
-    const win = this.activeWindows.get(jobId);
-    if (win) {
-      this.cancelledJobs.add(jobId);
-      this.destroyWindow(jobId);
-      return true;
-    }
-    return false;
+    if (!this.inFlight.has(jobId)) return false;
+    // Record intent even when no render window exists yet — runConvert checks
+    // it right after the window is created and after the PDF is written.
+    this.cancelledJobs.add(jobId);
+    this.destroyWindow(jobId);
+    return true;
   }
 
   private destroyWindow(jobId: string): void {
