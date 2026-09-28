@@ -4,10 +4,13 @@
  * by Vitest without a DOM.
  */
 
+import type { MessageKey } from './i18n';
+
 export type IndentOption = 2 | 4 | 'tab';
 
 export interface JsonValidationError {
-  message: string;
+  key: MessageKey;
+  detail?: string;
   line?: number;
   column?: number;
   /** Character offset into the source text, when it could be determined. */
@@ -57,13 +60,13 @@ export function parseJsonError(err: unknown, source: string): JsonValidationErro
     }
   }
 
-  return { message, line, column, position };
+  return { key: 'errors.jsonInvalid', detail: message, line, column, position };
 }
 
 /** Parse and re-serialize with the given indent. */
 export function formatJson(input: string, indent: IndentOption = 2): JsonResult {
   if (input.trim() === '') {
-    return { ok: false, error: { message: 'Input is empty' } };
+    return { ok: false, error: { key: 'errors.jsonEmpty' } };
   }
   try {
     const value = JSON.parse(input);
@@ -76,7 +79,7 @@ export function formatJson(input: string, indent: IndentOption = 2): JsonResult 
 /** Parse and re-serialize with no whitespace. */
 export function minifyJson(input: string): JsonResult {
   if (input.trim() === '') {
-    return { ok: false, error: { message: 'Input is empty' } };
+    return { ok: false, error: { key: 'errors.jsonEmpty' } };
   }
   try {
     const value = JSON.parse(input);
@@ -89,7 +92,7 @@ export function minifyJson(input: string): JsonResult {
 /** Validate only — returns null when the input is valid JSON. */
 export function validateJson(input: string): JsonValidationError | null {
   if (input.trim() === '') {
-    return { message: 'Input is empty' };
+    return { key: 'errors.jsonEmpty' };
   }
   try {
     JSON.parse(input);
@@ -102,7 +105,7 @@ export function validateJson(input: string): JsonValidationError | null {
 /** Escape a parsed value into a JSON string literal (double-encoded). */
 export function escapeJson(input: string): JsonResult {
   if (input.trim() === '') {
-    return { ok: false, error: { message: 'Input is empty' } };
+    return { ok: false, error: { key: 'errors.jsonEmpty' } };
   }
   try {
     const value = JSON.parse(input);
@@ -177,7 +180,7 @@ function decodeJsonEscapes(source: string): string {
  */
 export function unescapeJson(input: string): JsonResult {
   if (input.trim() === '') {
-    return { ok: false, error: { message: 'Input is empty' } };
+    return { ok: false, error: { key: 'errors.jsonEmpty' } };
   }
   const trimmed = input.trim();
   try {
@@ -187,7 +190,7 @@ export function unescapeJson(input: string): JsonResult {
     }
     return {
       ok: false,
-      error: { message: 'Input is not a JSON string literal — nothing to unescape' },
+      error: { key: 'errors.jsonNotStringLiteral' },
     };
   } catch {
     // Not valid JSON. Fall through and decode raw escapes.
@@ -196,7 +199,7 @@ export function unescapeJson(input: string): JsonResult {
   if (!trimmed.includes('\\')) {
     return {
       ok: false,
-      error: { message: 'Input is not a JSON string literal — nothing to unescape' },
+      error: { key: 'errors.jsonNotStringLiteral' },
     };
   }
 
@@ -204,7 +207,7 @@ export function unescapeJson(input: string): JsonResult {
     return { ok: true, output: decodeJsonEscapes(trimmed) };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid escape sequence';
-    return { ok: false, error: { message } };
+    return { ok: false, error: { key: 'errors.jsonInvalid', detail: message } };
   }
 }
 

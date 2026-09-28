@@ -11,6 +11,8 @@ import {
   type JsonValidationError,
   type JsonResult,
 } from '@shared/jsonTools';
+import type { AppError } from '@shared/i18n';
+import { useI18n } from '../../../hooks/useI18n';
 import styles from './JsonFormatter.module.css';
 
 const INDENTS: { id: IndentOption; label: string }[] = [
@@ -68,11 +70,12 @@ function fitTextareaWidth(textarea: HTMLTextAreaElement) {
 }
 
 function JsonFormatter() {
+  const { locale, t, formatError } = useI18n();
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [indent, setIndent] = useState<IndentOption>(2);
   const [copied, setCopied] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<AppError | null>(null);
   const [activeAction, setActiveAction] = useState<ActionId | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const outputRef = useRef<HTMLTextAreaElement>(null);
@@ -101,7 +104,7 @@ function JsonFormatter() {
       setOutput(result.output);
       setActiveAction(action);
     } else {
-      setActionError(result.error.message);
+      setActionError(result.error);
     }
   }, []);
 
@@ -197,10 +200,26 @@ function JsonFormatter() {
   }, []);
 
   const statusNode = useMemo(() => {
-    if (actionError) {
+    if (
+      actionError &&
+      (actionError.key === 'errors.jsonEmpty' || actionError.key === 'errors.jsonNotStringLiteral')
+    ) {
       return (
         <span className={styles.statusInvalid}>
-          ✗ <span className={styles.statusError}>{actionError}</span>
+          ✗ <span className={styles.statusError}>{formatError(actionError)}</span>
+        </span>
+      );
+    }
+    if (actionError?.key === 'errors.jsonInvalid') {
+      return (
+        <span className={styles.statusInvalid}>
+          ✗ {t('json.invalid')}
+          {actionError.detail ? (
+            <>
+              {' — '}
+              <span className={styles.statusError}>{actionError.detail}</span>
+            </>
+          ) : null}
         </span>
       );
     }
@@ -213,16 +232,25 @@ function JsonFormatter() {
         const { error } = validation;
         const where =
           error.line !== undefined
-            ? ` at line ${error.line}${error.column !== undefined ? `, column ${error.column}` : ''}`
+            ? error.column !== undefined
+              ? t('json.atLine', { line: error.line, column: error.column })
+              : t('json.atLineOnly', { line: error.line })
             : '';
         return (
           <span className={styles.statusInvalid}>
-            ✗ Invalid JSON{where} — <span className={styles.statusError}>{error.message}</span>
+            ✗ {t('json.invalid')}
+            {where ? ` ${where}` : ''}
+            {error.detail ? (
+              <>
+                {' — '}
+                <span className={styles.statusError}>{error.detail}</span>
+              </>
+            ) : null}
           </span>
         );
       }
     }
-  }, [actionError, validation]);
+  }, [actionError, formatError, locale, t, validation]);
 
   return (
     <div className={styles.container}>

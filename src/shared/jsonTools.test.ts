@@ -39,14 +39,18 @@ describe('formatJson', () => {
   it('returns an error for empty input', () => {
     const result = formatJson('   ');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toBe('Input is empty');
+    if (!result.ok) {
+      expect(result.error.key).toBe('errors.jsonEmpty');
+      expect(result.error.detail).toBeUndefined();
+    }
   });
 
   it('returns an error with position info for invalid JSON', () => {
     const result = formatJson('{\n  "a": 1,\n}');
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error.message.length).toBeGreaterThan(0);
+      expect(result.error.detail!.length).toBeGreaterThan(0);
+      expect(result.error.key).toBe('errors.jsonInvalid');
     }
   });
 });
@@ -71,11 +75,12 @@ describe('validateJson', () => {
   it('returns an error for invalid JSON', () => {
     const err = validateJson('{"a":}');
     expect(err).not.toBeNull();
-    expect(err!.message.length).toBeGreaterThan(0);
+    expect(err!.detail!.length).toBeGreaterThan(0);
+    expect(err!.key).toBe('errors.jsonInvalid');
   });
 
   it('returns an error for empty input', () => {
-    expect(validateJson('')).toEqual({ message: 'Input is empty' });
+    expect(validateJson('')).toEqual({ key: 'errors.jsonEmpty' });
   });
 });
 
@@ -89,7 +94,8 @@ describe('parseJsonError', () => {
       caught = err;
     }
     const parsed = parseJsonError(caught, source);
-    expect(parsed.message.length).toBeGreaterThan(0);
+    expect(parsed.detail!.length).toBeGreaterThan(0);
+    expect(parsed.key).toBe('errors.jsonInvalid');
     // V8 reports a position; when it does, we must derive line/column from it.
     if (parsed.position !== undefined) {
       expect(parsed.line).toBeGreaterThanOrEqual(1);
@@ -126,7 +132,7 @@ describe('escapeJson / unescapeJson', () => {
   it('unescape rejects non-string literals', () => {
     const result = unescapeJson('{"a":1}');
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toContain('not a JSON string literal');
+    if (!result.ok) expect(result.error.key).toBe('errors.jsonNotStringLiteral');
   });
 
   it('unescapes raw escaped text that is not wrapped in quotes', () => {
