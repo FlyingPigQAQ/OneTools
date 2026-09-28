@@ -114,22 +114,97 @@ export function escapeJson(input: string): JsonResult {
   }
 }
 
-/** Unwrap one level of string encoding. Input must be a JSON string literal. */
+/** Decode one level of JSON string escapes (`\"`, `\\`, `\n`, `\uXXXX`, …). */
+function decodeJsonEscapes(source: string): string {
+  let out = '';
+  for (let i = 0; i < source.length; i++) {
+    if (source[i] !== '\\') {
+      out += source[i];
+      continue;
+    }
+    const next = source[i + 1];
+    if (next === undefined) {
+      throw new Error('Trailing backslash');
+    }
+    switch (next) {
+      case '"':
+      case '\\':
+      case '/':
+        out += next;
+        i += 1;
+        break;
+      case 'b':
+        out += '\b';
+        i += 1;
+        break;
+      case 'f':
+        out += '\f';
+        i += 1;
+        break;
+      case 'n':
+        out += '\n';
+        i += 1;
+        break;
+      case 'r':
+        out += '\r';
+        i += 1;
+        break;
+      case 't':
+        out += '\t';
+        i += 1;
+        break;
+      case 'u': {
+        const hex = source.slice(i + 2, i + 6);
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+          throw new Error('Invalid \\u escape');
+        }
+        out += String.fromCharCode(Number.parseInt(hex, 16));
+        i += 5;
+        break;
+      }
+      default:
+        throw new Error(`Invalid escape \\${next}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Unwrap one level of string encoding.
+ * A JSON string literal is parsed. Otherwise raw escape sequences
+ * (`{\"a\":1}`, `\n`, `\uXXXX`) are decoded — the usual paste from logs
+ * and source code, which is not itself valid JSON.
+ */
 export function unescapeJson(input: string): JsonResult {
   if (input.trim() === '') {
     return { ok: false, error: { message: 'Input is empty' } };
   }
+  const trimmed = input.trim();
   try {
-    const value: unknown = JSON.parse(input);
-    if (typeof value !== 'string') {
-      return {
-        ok: false,
-        error: { message: 'Input is not a JSON string literal — nothing to unescape' },
-      };
+    const value: unknown = JSON.parse(trimmed);
+    if (typeof value === 'string') {
+      return { ok: true, output: value };
     }
-    return { ok: true, output: value };
+    return {
+      ok: false,
+      error: { message: 'Input is not a JSON string literal — nothing to unescape' },
+    };
+  } catch {
+    // Not valid JSON. Fall through and decode raw escapes.
+  }
+
+  if (!trimmed.includes('\\')) {
+    return {
+      ok: false,
+      error: { message: 'Input is not a JSON string literal — nothing to unescape' },
+    };
+  }
+
+  try {
+    return { ok: true, output: decodeJsonEscapes(trimmed) };
   } catch (err) {
-    return { ok: false, error: parseJsonError(err, input) };
+    const message = err instanceof Error ? err.message : 'Invalid escape sequence';
+    return { ok: false, error: { message } };
   }
 }
 

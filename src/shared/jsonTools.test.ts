@@ -128,6 +128,23 @@ describe('escapeJson / unescapeJson', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toContain('not a JSON string literal');
   });
+
+  it('unescapes raw escaped text that is not wrapped in quotes', () => {
+    const result = unescapeJson('{\\"a\\":1}');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.output).toBe('{"a":1}');
+  });
+
+  it('unescapes newline and unicode sequences in raw text', () => {
+    const result = unescapeJson('hello\\n\\u4e2d');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.output).toBe('hello\n中');
+  });
+
+  it('does not rewrite escape sequences inside a JSON object', () => {
+    const result = unescapeJson('{"a":"say \\"hi\\""}');
+    expect(result.ok).toBe(false);
+  });
 });
 
 describe('jsonStats', () => {
