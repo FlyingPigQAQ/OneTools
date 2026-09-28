@@ -1,3 +1,4 @@
+import { statusKey } from '@shared/i18n';
 import type { SplitJob } from '@shared/types';
 import { useI18n } from '../../../hooks/useI18n';
 import ProgressBar from '../../common/ProgressBar';
@@ -12,7 +13,7 @@ interface SplitQueueProps {
 }
 
 function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueProps) {
-  const { formatError } = useI18n();
+  const { t, formatError } = useI18n();
   const activeJobs = jobs.filter(
     (j) => j.status === 'pending' || j.status === 'converting' || j.status === 'completed' || j.status === 'error'
   );
@@ -26,7 +27,7 @@ function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueP
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h3 className={styles.title}>Split Queue</h3>
+        <h3 className={styles.title}>{t('queue.split')}</h3>
         {hasFinished && onRemove && (
           <button
             className={styles.clearBtn}
@@ -36,7 +37,7 @@ function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueP
                 .forEach((j) => onRemove(j.id))
             }
           >
-            Clear Finished
+            {t('queue.clearFinished')}
           </button>
         )}
       </div>
@@ -45,28 +46,28 @@ function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueP
           <li key={job.id} className={styles.item}>
             <div className={styles.info}>
               <span className={styles.fileName}>{job.fileName}</span>
-              <span className={`${styles.status} ${styles[job.status]}`}>{job.status}</span>
+              <span className={`${styles.status} ${styles[job.status]}`}>{t(statusKey(job.status))}</span>
             </div>
 
             <div className={styles.progress}>
               <ProgressBar progress={job.progress} status={job.status} />
               {(job.status === 'converting' || job.status === 'pending') && (
-                <button className={styles.cancelBtn} onClick={() => onCancel(job.id)} title="Cancel">
+                <button className={styles.cancelBtn} onClick={() => onCancel(job.id)} title={t('queue.cancel')}>
                   ✕
                 </button>
               )}
               {job.status === 'error' && onRetry && (
-                <button className={styles.retryBtn} onClick={() => onRetry(job.id)} title="Retry">
+                <button className={styles.retryBtn} onClick={() => onRetry(job.id)} title={t('queue.retry')}>
                   ↻
                 </button>
               )}
               {job.status === 'completed' && onReveal && (
-                <button className={styles.revealBtn} onClick={() => onReveal(job.id)} title="Show in Finder">
+                <button className={styles.revealBtn} onClick={() => onReveal(job.id)} title={t('queue.showInFinder')}>
                   🔍
                 </button>
               )}
               {(job.status === 'completed' || job.status === 'error') && onRemove && (
-                <button className={styles.cancelBtn} onClick={() => onRemove(job.id)} title="Remove">
+                <button className={styles.cancelBtn} onClick={() => onRemove(job.id)} title={t('files.remove')}>
                   🗑
                 </button>
               )}

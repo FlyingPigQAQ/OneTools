@@ -1,3 +1,4 @@
+import { useI18n } from '../../hooks/useI18n';
 import styles from './DropZone.module.css';
 
 interface DropZoneProps {
@@ -23,9 +24,11 @@ function DropZone({
   onClick,
   disabled,
   icon = '📁',
-  label = 'Drag & drop audio files here',
+  label,
   formats = ['MP3', 'AAC', 'FLAC', 'WAV', 'OGG', 'Opus', 'M4A', 'WMA'],
 }: DropZoneProps) {
+  const { t } = useI18n();
+
   return (
     <div
       className={`${styles.container} ${isDragging ? styles.dragging : ''} ${disabled ? styles.disabled : ''}`}
@@ -35,8 +38,8 @@ function DropZone({
       onClick={disabled ? undefined : onClick}
     >
       <div className={styles.icon}>{icon}</div>
-      <p className={styles.text}>{label}</p>
-      <p className={styles.subtext}>or click to browse</p>
+      <p className={styles.text}>{label ?? t('dropzone.audioLabel')}</p>
+      <p className={styles.subtext}>{t('dropzone.browse')}</p>
       <div className={styles.formats}>
         {formats.map((fmt) => (
           <span key={fmt} className={styles.badge}>{fmt}</span>

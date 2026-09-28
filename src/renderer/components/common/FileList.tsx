@@ -1,3 +1,4 @@
+import { useI18n } from '../../hooks/useI18n';
 import styles from './FileList.module.css';
 
 interface FileItem {
@@ -13,13 +14,14 @@ interface FileListProps {
 }
 
 function FileList({ files, onRemove, onClear }: FileListProps) {
+  const { t } = useI18n();
   if (files.length === 0) return null;
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.count}>{files.length} file{files.length !== 1 ? 's' : ''}</span>
-        <button className={styles.clearBtn} onClick={onClear}>Clear All</button>
+        <span className={styles.count}>{t('files.count', { count: files.length })}</span>
+        <button className={styles.clearBtn} onClick={onClear}>{t('files.clearAll')}</button>
       </div>
       <ul className={styles.list}>
         {files.map((file) => (
@@ -31,7 +33,7 @@ function FileList({ files, onRemove, onClear }: FileListProps) {
             <button
               className={styles.removeBtn}
               onClick={() => onRemove(file.id)}
-              title="Remove"
+              title={t('files.remove')}
             >
               ✕
             </button>
