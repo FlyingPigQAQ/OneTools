@@ -6,6 +6,7 @@ import { registerMarkdownPdfIpc } from './markdownPdf';
 import { registerVoiceRecorderIpc } from './voiceRecorder';
 import { registerAppInfoIpc } from './appInfo';
 import { registerFilesystemIpc } from './filesystem';
+import { registerLocaleIpc } from './locale';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   registerFileDialogIpc();
@@ -15,4 +16,5 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   registerVoiceRecorderIpc(mainWindow);
   registerFilesystemIpc();
   registerAppInfoIpc();
+  registerLocaleIpc();
 }

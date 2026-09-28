@@ -25,6 +25,8 @@ export const IPC = {
   // App info
   GET_APP_VERSION: 'app:getVersion',
   GET_PLATFORM_INFO: 'app:getPlatformInfo',
+  GET_LOCALE: 'app:getLocale',
+  SET_LOCALE: 'app:setLocale',
 
   // FFmpeg
   CHECK_FFMPEG: 'ffmpeg:check',
@@ -49,4 +51,5 @@ export const IPC_EVENTS = {
   RECORDING_TICK: 'voice-recorder:tick',
   RECORDING_STOPPED: 'voice-recorder:stopped',
   RECORDING_ERROR: 'voice-recorder:error',
+  LOCALE_CHANGED: 'app:localeChanged',
 } as const;

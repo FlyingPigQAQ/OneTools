@@ -1,6 +1,11 @@
 import { Menu, BrowserWindow, app } from 'electron';
+import { t, type Locale } from '@shared/i18n';
 
-export function createMenu(mainWindow: BrowserWindow): void {
+export function createMenu(
+  mainWindow: BrowserWindow,
+  locale: Locale,
+  onSelectLocale: (locale: Locale) => void,
+): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: app.name,
@@ -8,7 +13,7 @@ export function createMenu(mainWindow: BrowserWindow): void {
         { role: 'about' },
         { type: 'separator' },
         {
-          label: 'Preferences…',
+          label: t(locale, 'menu.preferences'),
           accelerator: 'CmdOrCtrl+,',
           click: () => {
             mainWindow.webContents.send('menu:preferences');
@@ -23,17 +28,17 @@ export function createMenu(mainWindow: BrowserWindow): void {
       ],
     },
     {
-      label: 'File',
+      label: t(locale, 'menu.file'),
       submenu: [
         {
-          label: 'Open Files...',
+          label: t(locale, 'menu.openFiles'),
           accelerator: 'CmdOrCtrl+O',
           click: () => {
             mainWindow.webContents.send('menu:openFiles');
           },
         },
         {
-          label: 'Reveal Output in Finder',
+          label: t(locale, 'menu.revealOutput'),
           accelerator: 'CmdOrCtrl+Shift+R',
           click: () => {
             mainWindow.webContents.send('menu:revealOutput');
@@ -44,7 +49,7 @@ export function createMenu(mainWindow: BrowserWindow): void {
       ],
     },
     {
-      label: 'Edit',
+      label: t(locale, 'menu.edit'),
       submenu: [
         { role: 'undo' },
         { role: 'redo' },
@@ -56,7 +61,7 @@ export function createMenu(mainWindow: BrowserWindow): void {
       ],
     },
     {
-      label: 'View',
+      label: t(locale, 'menu.view'),
       submenu: [
         { role: 'reload' },
         { role: 'forceReload' },
@@ -67,10 +72,28 @@ export function createMenu(mainWindow: BrowserWindow): void {
         { role: 'zoomOut' },
         { type: 'separator' },
         { role: 'togglefullscreen' },
+        { type: 'separator' },
+        {
+          label: t(locale, 'menu.language'),
+          submenu: [
+            {
+              label: '中文',
+              type: 'radio',
+              checked: locale === 'zh',
+              click: () => onSelectLocale('zh'),
+            },
+            {
+              label: 'English',
+              type: 'radio',
+              checked: locale === 'en',
+              click: () => onSelectLocale('en'),
+            },
+          ],
+        },
       ],
     },
     {
-      label: 'Window',
+      label: t(locale, 'menu.window'),
       submenu: [
         { role: 'minimize' },
         { role: 'close' },

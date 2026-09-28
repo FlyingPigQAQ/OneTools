@@ -3,6 +3,7 @@ import { join } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { createMenu } from './menu';
 import { registerIpcHandlers } from './ipc';
+import { initLocale, setLocale } from './services/locale';
 
 const isDev = !app.isPackaged;
 
@@ -26,15 +27,16 @@ function createWindow(): void {
     },
   });
 
+  const locale = initLocale(mainWindow);
+  registerIpcHandlers(mainWindow);
+  createMenu(mainWindow, locale, setLocale);
+
   if (isDev) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'] || 'http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
-
-  createMenu(mainWindow);
-  registerIpcHandlers(mainWindow);
 }
 
 app.whenReady().then(() => {

@@ -11,10 +11,21 @@ import type {
   RecordingResult,
   ElectronAPI,
 } from '@shared/types';
+import type { Locale } from '@shared/i18n';
 
 export type { ElectronAPI };
 
+const initialLocale = ipcRenderer.sendSync(IPC.GET_LOCALE) as Locale;
+
 const api: ElectronAPI = {
+  getInitialLocale: () => initialLocale,
+  setLocale: (locale: Locale) => ipcRenderer.invoke(IPC.SET_LOCALE, locale),
+  onLocaleChanged: (callback: (locale: Locale) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, locale: Locale) => callback(locale);
+    ipcRenderer.on(IPC_EVENTS.LOCALE_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_EVENTS.LOCALE_CHANGED, handler);
+  },
+
   selectInputFiles: (kind?: 'audio' | 'markdown') =>
     ipcRenderer.invoke(IPC.SELECT_INPUT_FILES, kind),
   selectOutputDir: () => ipcRenderer.invoke(IPC.SELECT_OUTPUT_DIR),

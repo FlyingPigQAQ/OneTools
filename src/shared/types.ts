@@ -1,3 +1,5 @@
+import type { Locale } from '@shared/i18n';
+
 export interface PlatformInfo {
   platform: string;
   arch: string;
@@ -167,6 +169,11 @@ export interface CompletedRecording {
  * it and the renderer consumes it via `window.electronAPI`.
  */
 export interface ElectronAPI {
+  // Locale. The initial value is read synchronously in preload before first paint.
+  getInitialLocale(): Locale;
+  setLocale(locale: Locale): Promise<Locale>;
+  onLocaleChanged(callback: (locale: Locale) => void): () => void;
+
   // File dialogs
   /** `kind` selects the open-dialog filter set; defaults to 'audio'. */
   selectInputFiles(kind?: 'audio' | 'markdown'): Promise<string[]>;
