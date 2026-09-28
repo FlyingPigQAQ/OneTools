@@ -13,6 +13,7 @@ import {
   buildSegmentArgs,
   partFileName,
 } from './splitArgs';
+import { removeQuietly } from '../utils/files';
 
 /**
  * Audio splitting tool. Cuts one audio file into multiple parts by a target
@@ -22,6 +23,10 @@ import {
  */
 export class AudioSplitter {
   private activeJobs = new Map<string, ReturnType<typeof spawn>>();
+  /** Job ids the user cancelled — used to suppress the error a kill raises. */
+  private cancelledJobs = new Set<string>();
+  /** Job ids currently inside split(), even before ffmpeg has spawned. */
+  private inFlight = new Set<string>();
 
   async split(
     job: SplitJob,
@@ -31,6 +36,23 @@ export class AudioSplitter {
   ): Promise<void> {
     await ffmpegManager.resolveBinary();
 
+    // Register in-flight from the first await so cancel() is honoured even
+    // while the duration/byte-rate probes run, before ffmpeg has spawned.
+    this.inFlight.add(job.id);
+    try {
+      await this.runSplit(job, mainWindow, onProgress, onComplete);
+    } finally {
+      this.inFlight.delete(job.id);
+      this.activeJobs.delete(job.id);
+    }
+  }
+
+  private async runSplit(
+    job: SplitJob,
+    mainWindow: BrowserWindow,
+    onProgress: (data: ProgressData) => void,
+    onComplete: (jobId: string, success: boolean, error?: AppError) => void
+  ): Promise<void> {
     const ext = extname(job.inputPath).slice(1) || 'mp3';
     const baseName = basename(job.inputPath, extname(job.inputPath));
     const outDir = job.options.outputDir || dirname(job.inputPath);
@@ -74,14 +96,15 @@ export class AudioSplitter {
     const expected = expectedSegmentCount(totalDuration, segDur);
     this.cleanStaleSegments(outDir, baseName, ext);
 
+    let currentOut: string | undefined;
     try {
       let allOk = true;
       let lastError: AppError | undefined;
 
       for (let i = 0; i < expected; i++) {
         const start = i * segDur;
-        const outFile = join(outDir, partFileName(baseName, i, ext));
-        const segArgs = buildSegmentArgs(job.inputPath, outFile, start, segDur);
+        currentOut = join(outDir, partFileName(baseName, i, ext));
+        const segArgs = buildSegmentArgs(job.inputPath, currentOut, start, segDur);
         console.log(`[OneTools] Split segment ${i + 1}/${expected}: ${segArgs.join(' ')}`);
 
         const segIndex = i;
@@ -95,8 +118,20 @@ export class AudioSplitter {
             const segPos = Math.min(outTimeMs / 1000, segDur);
             return ((segIndex * segDur + segPos) / totalDur) * 100;
           },
-          IPC_EVENTS.SPLIT_PROGRESS
+          IPC_EVENTS.SPLIT_PROGRESS,
+          (proc) => {
+            this.activeJobs.set(job.id, proc);
+            // Cancel arrived before spawn: honour it immediately.
+            if (this.cancelledJobs.has(job.id)) proc.kill('SIGTERM');
+          }
         );
+
+        if (this.cancelledJobs.delete(job.id)) {
+          // Cancelled: drop the half-written segment. Segments finished in
+          // earlier iterations are complete files and stay.
+          removeQuietly(currentOut);
+          return;
+        }
 
         if (!res.success) {
           allOk = false;
@@ -114,6 +149,10 @@ export class AudioSplitter {
         mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: lastError });
       }
     } catch (err) {
+      if (this.cancelledJobs.delete(job.id)) {
+        removeQuietly(currentOut);
+        return;
+      }
       const appError: AppError =
         err instanceof Error
           ? { key: 'errors.operationFailed', detail: err.message }
@@ -128,13 +167,15 @@ export class AudioSplitter {
   }
 
   cancel(jobId: string): boolean {
+    if (!this.inFlight.has(jobId)) return false;
+    // Record intent even if ffmpeg has not spawned yet; runSplit checks this.
+    this.cancelledJobs.add(jobId);
     const proc = this.activeJobs.get(jobId);
     if (proc) {
       proc.kill('SIGTERM');
       this.activeJobs.delete(jobId);
-      return true;
     }
-    return false;
+    return true;
   }
 
   /** Remove leftover `${baseName}_partNNN.${ext}` files from a previous split. */
