@@ -9,6 +9,9 @@ import { registerFilesystemIpc } from './filesystem';
 import { registerLocaleIpc } from './locale';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  // Each register* function is idempotent. Window-scoped handlers also replace
+  // their current-window reference, so a later macOS activate can recreate the
+  // window without calling ipcMain.handle twice.
   registerFileDialogIpc();
   registerAudioConverterIpc(mainWindow);
   registerAudioSplitterIpc(mainWindow);

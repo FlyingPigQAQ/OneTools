@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { en } from './en';
 import { zh } from './zh';
-import { formatAppError, resolveLocale, t, type MessageKey } from './translate';
+import { formatAppError, isAppError, resolveLocale, t, type MessageKey } from './translate';
 
 function leaves(tree: unknown, prefix = ''): string[] {
   if (typeof tree === 'string') return [prefix];
@@ -58,6 +58,18 @@ describe('dictionaries', () => {
       expect(t('en', key as MessageKey).length).toBeGreaterThan(0);
       expect(t('zh', key as MessageKey).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('isAppError', () => {
+  it('accepts an object with a string key', () => {
+    expect(isAppError({ key: 'errors.audioLoadFailed' })).toBe(true);
+  });
+
+  it('rejects values that are not app errors', () => {
+    expect(isAppError(new Error('boom'))).toBe(false);
+    expect(isAppError(null)).toBe(false);
+    expect(isAppError({ key: 1 })).toBe(false);
   });
 });
 

@@ -39,6 +39,15 @@ export function formatAppError(locale: Locale, error: AppError): string {
   return error.detail ? `${text}\n${error.detail}` : text;
 }
 
+export function isAppError(value: unknown): value is AppError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'key' in value &&
+    typeof (value as { key: unknown }).key === 'string'
+  );
+}
+
 const STATUS_KEYS = {
   pending: 'status.pending',
   converting: 'status.converting',

@@ -2,7 +2,12 @@ import { ipcMain, shell } from 'electron';
 import { existsSync } from 'fs';
 import { IPC } from '@shared/constants';
 
+let registered = false;
+
 export function registerFilesystemIpc(): void {
+  if (registered) return;
+  registered = true;
+
   // Reveal a file (or folder) in Finder, highlighting the file.
   ipcMain.handle(IPC.SHOW_ITEM_IN_FOLDER, async (_event, fullPath: string) => {
     if (typeof fullPath !== 'string' || !fullPath) return false;

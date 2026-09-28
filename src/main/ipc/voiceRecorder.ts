@@ -4,9 +4,23 @@ import { IPC } from '@shared/constants';
 import type { RecordingStartResult, RecordingStopResult } from '@shared/types';
 import { voiceRecorder } from '../services/voiceRecorder';
 
+let currentWindow: BrowserWindow | null = null;
+let registered = false;
+
+function requireCurrentWindow(): BrowserWindow {
+  if (!currentWindow || currentWindow.isDestroyed()) {
+    throw new Error('Main window is unavailable');
+  }
+  return currentWindow;
+}
+
 export function registerVoiceRecorderIpc(mainWindow: BrowserWindow): void {
+  currentWindow = mainWindow;
+  if (registered) return;
+  registered = true;
+
   ipcMain.handle(IPC.START_RECORDING, async (_event, outputDir: string): Promise<RecordingStartResult> => {
-    return voiceRecorder.start(outputDir, mainWindow);
+    return voiceRecorder.start(outputDir, requireCurrentWindow());
   });
 
   ipcMain.handle(IPC.STOP_RECORDING, async (): Promise<RecordingStopResult> => {

@@ -3,11 +3,25 @@ import { IPC } from '@shared/constants';
 import { audioSplitter } from '../services/audioSplitter';
 import type { SplitJob } from '@shared/types';
 
+let currentWindow: BrowserWindow | null = null;
+let registered = false;
+
+function requireCurrentWindow(): BrowserWindow {
+  if (!currentWindow || currentWindow.isDestroyed()) {
+    throw new Error('Main window is unavailable');
+  }
+  return currentWindow;
+}
+
 export function registerAudioSplitterIpc(mainWindow: BrowserWindow): void {
+  currentWindow = mainWindow;
+  if (registered) return;
+  registered = true;
+
   ipcMain.handle(IPC.START_SPLIT, async (_event, job: SplitJob) => {
     await audioSplitter.split(
       job,
-      mainWindow,
+      requireCurrentWindow(),
       (_data) => {
         // Progress is sent via IPC events in the splitter service.
       },

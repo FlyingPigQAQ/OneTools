@@ -81,7 +81,7 @@ function VoiceRecorder() {
             )}
           </div>
 
-          {/* output folder */}
+          {/* Output Directory */}
           <div className={styles.outputSection}>
             <label>{t('output.directory')}</label>
             <div className={styles.outputDir}>

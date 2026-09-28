@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron';
 import { readFile, writeFile } from 'fs/promises';
 import { basename, dirname, extname } from 'path';
 import { IPC_EVENTS } from '@shared/constants';
-import { formatAppError, type AppError } from '@shared/i18n';
+import { formatAppError, isAppError, type AppError } from '@shared/i18n';
 import type {
   MarkdownPdfJob,
   PdfMargin,
@@ -19,15 +19,6 @@ import { resolveUniqueOutputPath } from '../utils/outputPath';
  * events. Shared infra is limited to `resolveUniqueOutputPath` (output-conflict
  * avoidance) and the common `ProgressData`/`ConversionResult` event shapes.
  */
-function isAppError(value: unknown): value is AppError {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'key' in value &&
-    typeof (value as { key: unknown }).key === 'string'
-  );
-}
-
 export class MarkdownPdfConverter {
   /** Active hidden render windows keyed by job id, so cancel can destroy them. */
   private activeWindows = new Map<string, BrowserWindow>();

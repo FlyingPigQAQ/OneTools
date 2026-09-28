@@ -3,7 +3,12 @@ import { IPC } from '@shared/constants';
 import { getPlatformInfo } from '../utils/platform';
 import { ffmpegManager } from '../services/ffmpegManager';
 
+let registered = false;
+
 export function registerAppInfoIpc(): void {
+  if (registered) return;
+  registered = true;
+
   ipcMain.handle(IPC.GET_APP_VERSION, () => {
     return app.getVersion();
   });

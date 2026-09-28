@@ -4,7 +4,12 @@ import { t } from '@shared/i18n';
 import { MARKDOWN_EXTENSIONS } from '@shared/markdown';
 import { getLocale } from '../services/locale';
 
+let registered = false;
+
 export function registerFileDialogIpc(): void {
+  if (registered) return;
+  registered = true;
+
   // `kind` selects the filter set shown in the open dialog. Defaults to audio
   // so the existing audio tools, which call this with no argument, are
   // unaffected. Markdown → PDF passes 'markdown'.

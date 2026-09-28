@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { AppError } from '@shared/i18n';
+import { isAppError, type AppError } from '@shared/i18n';
 import type { CompletedRecording } from '@shared/types';
 import { useI18n } from '../../../hooks/useI18n';
 import styles from './VoiceRecorder.module.css';
@@ -12,15 +12,6 @@ interface RecordingListProps {
 }
 
 const LOAD_TIMEOUT_MS = 15_000;
-
-function isAppError(value: unknown): value is AppError {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'key' in value &&
-    typeof (value as { key: unknown }).key === 'string'
-  );
-}
 
 function RecordingList({ recordings, formatDuration, onDelete, onReveal }: RecordingListProps) {
   const { t, formatError } = useI18n();
@@ -114,6 +105,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
 
   const handlePlay = useCallback(
     async (id: string, filePath: string) => {
+      setPlayError(null);
       if (playingIdRef.current === id) {
         audioRef.current?.pause();
         setPlayingId(null);
@@ -191,7 +183,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
         setPlayError(null);
       } catch (err) {
         console.error('[OneTools] Audio load/play failed:', err);
-        if (isAppError(err)) setPlayError(err);
+        setPlayError(isAppError(err) ? err : { key: 'errors.audioLoadFailed' });
         stopPlayback();
       }
     },
