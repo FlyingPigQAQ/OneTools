@@ -58,7 +58,6 @@ function Sidebar({ width }: SidebarProps) {
             English
           </button>
         </div>
-        <p className={styles.colophonText}>{t('sidebar.colophon')}</p>
       </div>
     </aside>
   );

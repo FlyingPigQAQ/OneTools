@@ -3,7 +3,6 @@ export const en = {
     issue: 'Vol. I — No. 1',
     subtitle: 'A compendium of utilities for the modern artisan',
     contents: 'Contents',
-    colophon: 'Printed on the finest recycled electrons. All rights reserved.',
   },
   menu: {
     preferences: 'Preferences…',

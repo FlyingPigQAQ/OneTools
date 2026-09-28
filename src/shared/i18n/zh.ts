@@ -5,7 +5,6 @@ export const zh = {
     issue: '第一卷 — 第 1 期',
     subtitle: '给现代手艺人的实用工具集',
     contents: '目录',
-    colophon: '以回收电子精心印制。版权所有。',
   },
   menu: {
     preferences: '偏好设置…',
