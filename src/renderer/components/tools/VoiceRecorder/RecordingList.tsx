@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import type { AppError } from '@shared/i18n';
 import type { CompletedRecording } from '@shared/types';
+import { useI18n } from '../../../hooks/useI18n';
 import styles from './VoiceRecorder.module.css';
 
 interface RecordingListProps {
@@ -11,9 +13,20 @@ interface RecordingListProps {
 
 const LOAD_TIMEOUT_MS = 15_000;
 
+function isAppError(value: unknown): value is AppError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'key' in value &&
+    typeof (value as { key: unknown }).key === 'string'
+  );
+}
+
 function RecordingList({ recordings, formatDuration, onDelete, onReveal }: RecordingListProps) {
+  const { t, formatError } = useI18n();
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [playError, setPlayError] = useState<AppError | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -75,7 +88,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
 
       const timeoutId = window.setTimeout(() => {
         cleanup();
-        reject(new Error('Audio load timed out'));
+        reject({ key: 'errors.audioLoadTimeout' });
       }, LOAD_TIMEOUT_MS);
 
       const onCanPlay = () => {
@@ -85,7 +98,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
 
       const onLoadError = () => {
         cleanup();
-        reject(new Error('Failed to load audio'));
+        reject({ key: 'errors.audioLoadFailed' });
       };
 
       const cleanup = () => {
@@ -175,8 +188,10 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
         loadingIdRef.current = null;
         setPlayingId(id);
         playingIdRef.current = id;
+        setPlayError(null);
       } catch (err) {
         console.error('[OneTools] Audio load/play failed:', err);
+        if (isAppError(err)) setPlayError(err);
         stopPlayback();
       }
     },
@@ -193,20 +208,17 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
     [duration]
   );
 
-  if (recordings.length === 0) {
-    return (
-      <div className={styles.recordingsPanel}>
-        <h3>Recordings</h3>
-        <p className={styles.emptyHint}>
-          No recordings yet. Start recording to see your files here.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.recordingsPanel}>
-      <h3>Recordings ({recordings.length})</h3>
+      <h3>
+        {recordings.length === 0
+          ? t('recorder.recordings')
+          : t('recorder.recordingsCount', { count: recordings.length })}
+      </h3>
+      {playError ? <p className={styles.playError}>{formatError(playError)}</p> : null}
+      {recordings.length === 0 ? (
+        <p className={styles.emptyHint}>{t('recorder.empty')}</p>
+      ) : (
       <div className={styles.recordingsList}>
         {recordings.map((rec) => {
           const isPlaying = playingId === rec.id;
@@ -224,14 +236,14 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
                     className={`${styles.playBtn} ${isPlaying ? styles.playing : ''}`}
                     onClick={() => handlePlay(rec.id, rec.filePath)}
                     disabled={isLoading}
-                    title={isPlaying ? 'Pause' : 'Play'}
+                    title={isPlaying ? t('recorder.pause') : t('recorder.play')}
                   >
                     {isLoading ? '⏳' : isPlaying ? '⏸' : '▶'}
                   </button>
                   <button
                     className={styles.actionBtn}
                     onClick={() => onReveal(rec.filePath)}
-                    title="Reveal in Finder"
+                    title={t('recorder.reveal')}
                   >
                     🔍
                   </button>
@@ -241,7 +253,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
                       if (isPlaying) stopPlayback();
                       onDelete(rec.filePath, rec.id);
                     }}
-                    title="Delete recording"
+                    title={t('recorder.delete')}
                   >
                     🗑
                   </button>
@@ -267,6 +279,7 @@ function RecordingList({ recordings, formatDuration, onDelete, onReveal }: Recor
           );
         })}
       </div>
+      )}
     </div>
   );
 }

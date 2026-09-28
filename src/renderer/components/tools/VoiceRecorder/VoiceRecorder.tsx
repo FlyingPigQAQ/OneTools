@@ -6,7 +6,7 @@ import ToolHeader from '../../common/ToolHeader';
 import styles from './VoiceRecorder.module.css';
 
 function VoiceRecorder() {
-  const { formatError } = useI18n();
+  const { t, formatError } = useI18n();
   const {
     isRecording,
     elapsedSec,
@@ -33,8 +33,8 @@ function VoiceRecorder() {
   return (
     <div className={styles.container}>
       <ToolHeader
-        title="Voice Recorder"
-        subtitle="Record audio from your microphone and save as MP3."
+        title={t('tools.voiceRecorder.title')}
+        subtitle={t('tools.voiceRecorder.subtitle')}
         number="03"
       />
 
@@ -48,10 +48,10 @@ function VoiceRecorder() {
               disabled={!outputDir && !isRecording}
               title={
                 !outputDir && !isRecording
-                  ? 'Select an output directory first'
+                  ? t('recorder.selectDirFirst')
                   : isRecording
-                    ? 'Stop recording'
-                    : 'Start recording'
+                    ? t('recorder.stop')
+                    : t('recorder.start')
               }
             >
               {isRecording ? (
@@ -64,32 +64,32 @@ function VoiceRecorder() {
             {isRecording && (
               <>
                 <span className={styles.timer}>{formatDuration(elapsedSec)}</span>
-                <span className={styles.recordingLabel}>Recording</span>
+                <span className={styles.recordingLabel}>{t('recorder.recording')}</span>
               </>
             )}
 
             {isRecording && (
               <button className={styles.stopButton} onClick={stopRecording}>
-                Stop Recording
+                {t('recorder.stopButton')}
               </button>
             )}
 
             {!isRecording && !outputDir && (
               <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-caption)' }}>
-                Select an output directory to start recording.
+                {t('recorder.selectDirHint')}
               </p>
             )}
           </div>
 
-          {/* Output Directory */}
+          {/* output folder */}
           <div className={styles.outputSection}>
-            <label>Output Directory</label>
+            <label>{t('output.directory')}</label>
             <div className={styles.outputDir}>
               <span className={styles.dirPath}>
-                {outputDir || 'No directory selected'}
+                {outputDir || t('output.noneSelected')}
               </span>
               <button onClick={selectOutputDir} disabled={isRecording}>
-                {outputDir ? 'Change' : 'Choose...'}
+                {outputDir ? t('output.change') : t('output.choose')}
               </button>
             </div>
           </div>

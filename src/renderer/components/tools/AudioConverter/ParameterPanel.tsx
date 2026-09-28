@@ -1,4 +1,5 @@
 import { getFormatById, BITRATE_PRESETS, SAMPLE_RATES } from '@shared/audioFormats';
+import { useI18n } from '../../../hooks/useI18n';
 import styles from './ParameterPanel.module.css';
 
 interface ParameterPanelProps {
@@ -24,17 +25,18 @@ function ParameterPanel({
   onChannelsChange,
   onUseVbrChange,
 }: ParameterPanelProps) {
+  const { t } = useI18n();
   const fmt = getFormatById(format);
   const supportsBitrate = fmt?.supportsBitrate ?? false;
   const supportsVbr = fmt?.supportsVbr ?? false;
 
   return (
     <div className={styles.container}>
-      <label className={styles.sectionLabel}>Parameters</label>
+      <label className={styles.sectionLabel}>{t('parameters.title')}</label>
 
       {supportsBitrate && (
         <div className={styles.group}>
-          <label className={styles.label}>Bitrate (kbps)</label>
+          <label className={styles.label}>{t('parameters.bitrate')}</label>
           <div className={styles.options}>
             {BITRATE_PRESETS.map((b) => (
               <button
@@ -58,13 +60,13 @@ function ParameterPanel({
               checked={!!useVbr}
               onChange={(e) => onUseVbrChange(e.target.checked)}
             />
-            <span>Variable bitrate (VBR)</span>
+            <span>{t('parameters.vbr')}</span>
           </label>
         </div>
       )}
 
       <div className={styles.group}>
-        <label className={styles.label}>Sample Rate</label>
+        <label className={styles.label}>{t('parameters.sampleRate')}</label>
         <div className={styles.options}>
           {SAMPLE_RATES.map((rate) => (
             <button
@@ -72,26 +74,28 @@ function ParameterPanel({
               className={`${styles.optionBtn} ${sampleRate === rate ? styles.active : ''}`}
               onClick={() => onSampleRateChange(rate)}
             >
-              {rate >= 1000 ? `${rate / 1000} kHz` : `${rate} Hz`}
+              {rate >= 1000
+                ? t('parameters.khz', { n: rate / 1000 })
+                : t('parameters.hz', { n: rate })}
             </button>
           ))}
         </div>
       </div>
 
       <div className={styles.group}>
-        <label className={styles.label}>Channels</label>
+        <label className={styles.label}>{t('parameters.channels')}</label>
         <div className={styles.options}>
           <button
             className={`${styles.optionBtn} ${channels === 1 ? styles.active : ''}`}
             onClick={() => onChannelsChange(1)}
           >
-            Mono
+            {t('parameters.mono')}
           </button>
           <button
             className={`${styles.optionBtn} ${channels === 2 ? styles.active : ''}`}
             onClick={() => onChannelsChange(2)}
           >
-            Stereo
+            {t('parameters.stereo')}
           </button>
         </div>
       </div>

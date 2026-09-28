@@ -128,7 +128,7 @@
   color: var(--color-error);
 }
 
-/* ── Output Directory ── */
+/* ── output folder ── */
 .outputSection {
   background-color: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -228,6 +228,13 @@
   color: var(--color-text-primary);
   margin-bottom: var(--spacing-md);
   letter-spacing: -0.01em;
+}
+
+.playError {
+  margin: 0 0 var(--spacing-md);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-body);
+  color: var(--color-error);
 }
 
 .emptyHint {

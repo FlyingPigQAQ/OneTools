@@ -1,4 +1,5 @@
 import { AUDIO_FORMATS } from '@shared/audioFormats';
+import { useI18n } from '../../../hooks/useI18n';
 import styles from './FormatSelector.module.css';
 
 interface FormatSelectorProps {
@@ -7,9 +8,11 @@ interface FormatSelectorProps {
 }
 
 function FormatSelector({ value, onChange }: FormatSelectorProps) {
+  const { t } = useI18n();
+
   return (
     <div className={styles.container}>
-      <label className={styles.label}>Output Format</label>
+      <label className={styles.label}>{t('parameters.outputFormat')}</label>
       <div className={styles.grid}>
         {AUDIO_FORMATS.map((fmt) => (
           <button

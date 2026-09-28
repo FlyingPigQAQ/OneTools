@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAudioSplitter } from '../../../hooks/useAudioSplitter';
 import { useFileDrop } from '../../../hooks/useFileDrop';
+import { useI18n } from '../../../hooks/useI18n';
 import DropZone from '../../common/DropZone';
 import FileList from '../../common/FileList';
 import SplitQueue from './SplitQueue';
@@ -9,6 +10,7 @@ import ToolHeader from '../../common/ToolHeader';
 import styles from './AudioSplitter.module.css';
 
 function AudioSplitter() {
+  const { t } = useI18n();
   const {
     jobs,
     isSplitting,
@@ -67,12 +69,12 @@ function AudioSplitter() {
   return (
     <div className={styles.container}>
       <ToolHeader
-        title="Audio Splitter"
-        subtitle="Split an audio file into parts by size or duration — no re-encoding."
+        title={t('tools.audioSplitter.title')}
+        subtitle={t('tools.audioSplitter.subtitle')}
         number="02"
       />
       {ffmpegReady === false && (
-        <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
+        <div className={styles.warning}>{t('warnings.ffmpegMissing')}</div>
       )}
 
       <div className={styles.content}>
@@ -93,17 +95,15 @@ function AudioSplitter() {
           />
 
           {jobs.length === 0 && (
-            <p className={styles.emptyHint}>
-              No files added yet. Drag audio files above or click to browse.
-            </p>
+            <p className={styles.emptyHint}>{t('files.emptyAudio')}</p>
           )}
 
           {jobs.length > 0 && (
             <div className={styles.outputSection}>
-              <label>Output Directory</label>
+              <label>{t('output.directory')}</label>
               <div className={styles.outputDir}>
-                <span className={styles.dirPath}>{outputDir || 'Same as input'}</span>
-                <button onClick={handleSelectOutputDir}>Change</button>
+                <span className={styles.dirPath}>{outputDir || t('output.sameAsInput')}</span>
+                <button onClick={handleSelectOutputDir}>{t('output.change')}</button>
               </div>
             </div>
           )}
@@ -114,32 +114,36 @@ function AudioSplitter() {
               onClick={handleSplit}
               disabled={isSplitting}
             >
-              {isSplitting ? 'Splitting...' : `Split ${jobs.filter((j) => j.status === 'pending').length} file(s)`}
+              {isSplitting
+                ? t('actions.splitting')
+                : t('actions.split', {
+                    count: jobs.filter((j) => j.status === 'pending').length,
+                  })}
             </button>
           )}
         </section>
 
         <section className={styles.rightPanel}>
           <div className={styles.panel}>
-            <label className={styles.sectionLabel}>Split Mode</label>
+            <label className={styles.sectionLabel}>{t('split.mode')}</label>
             <div className={styles.modeRow}>
               <button
                 className={`${styles.modeBtn} ${mode === 'size' ? styles.active : ''}`}
                 onClick={() => setMode('size')}
               >
-                By Size
+                {t('split.bySize')}
               </button>
               <button
                 className={`${styles.modeBtn} ${mode === 'duration' ? styles.active : ''}`}
                 onClick={() => setMode('duration')}
               >
-                By Duration
+                {t('split.byDuration')}
               </button>
             </div>
 
             {mode === 'size' ? (
               <div className={styles.group}>
-                <label className={styles.label}>Target size per file (MB)</label>
+                <label className={styles.label}>{t('split.targetSize')}</label>
                 <div className={styles.inputRow}>
                   <input
                     type="number"
@@ -154,15 +158,11 @@ function AudioSplitter() {
                   />
                   <span className={styles.unit}>MB</span>
                 </div>
-                <p className={styles.hint}>
-                  Approximate. Files stay at or under this size; exact size isn&apos;t
-                  possible because splitting preserves the original codec (no re-encode)
-                  and cuts only on keyframe boundaries.
-                </p>
+                <p className={styles.hint}>{t('split.sizeHint')}</p>
               </div>
             ) : (
               <div className={styles.group}>
-                <label className={styles.label}>Duration per file (seconds)</label>
+                <label className={styles.label}>{t('split.duration')}</label>
                 <div className={styles.inputRow}>
                   <input
                     type="number"
@@ -175,9 +175,9 @@ function AudioSplitter() {
                       setDurationSec(isNaN(v) ? 0 : v);
                     }}
                   />
-                  <span className={styles.unit}>sec</span>
+                  <span className={styles.unit}>{t('split.sec')}</span>
                 </div>
-                <p className={styles.hint}>Each output file will be roughly this long.</p>
+                <p className={styles.hint}>{t('split.durationHint')}</p>
               </div>
             )}
           </div>

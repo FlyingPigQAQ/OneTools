@@ -1,7 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMarkdownPdf } from '../../../hooks/useMarkdownPdf';
 import { useFileDrop } from '../../../hooks/useFileDrop';
+import { useI18n } from '../../../hooks/useI18n';
 import { MARKDOWN_EXTENSIONS } from '@shared/markdown';
+import type { MessageKey } from '@shared/i18n';
 import DropZone from '../../common/DropZone';
 import FileList from '../../common/FileList';
 import MarkdownPdfQueue from './MarkdownPdfQueue';
@@ -11,13 +13,22 @@ import styles from './MarkdownPdf.module.css';
 
 const PAGE_SIZES: PdfPageSize[] = ['A4', 'Letter', 'Legal'];
 const MARGINS: PdfMargin[] = ['normal', 'narrow', 'none'];
-const THEMES: { id: MarkdownTheme; label: string }[] = [
-  { id: 'light', label: 'Light' },
-  { id: 'sepia', label: 'Sepia' },
-  { id: 'dark', label: 'Dark' },
-];
+const THEMES: MarkdownTheme[] = ['light', 'sepia', 'dark'];
+
+const MARGIN_KEYS: Record<PdfMargin, MessageKey> = {
+  normal: 'markdown.marginNormal',
+  narrow: 'markdown.marginNarrow',
+  none: 'markdown.marginNone',
+};
+
+const THEME_KEYS: Record<MarkdownTheme, MessageKey> = {
+  light: 'markdown.themeLight',
+  sepia: 'markdown.themeSepia',
+  dark: 'markdown.themeDark',
+};
 
 function MarkdownPdf() {
+  const { t } = useI18n();
   const {
     jobs,
     isConverting,
@@ -104,8 +115,8 @@ function MarkdownPdf() {
   return (
     <div className={styles.container}>
       <ToolHeader
-        title="Markdown to PDF"
-        subtitle="Render Markdown documents to a styled PDF — no external binary required."
+        title={t('tools.markdownPdf.title')}
+        subtitle={t('tools.markdownPdf.subtitle')}
         number="04"
       />
 
@@ -119,14 +130,12 @@ function MarkdownPdf() {
             onClick={handleBrowse}
             disabled={isConverting}
             icon="📄"
-            label="Drag & drop Markdown files here"
+            label={t('dropzone.markdownLabel')}
             formats={['MD', 'Markdown', 'MDOWN', 'MKD']}
           />
 
           {jobs.length === 0 && (
-            <p className={styles.emptyHint}>
-              No files added yet. Drag Markdown files above or click to browse.
-            </p>
+            <p className={styles.emptyHint}>{t('files.emptyMarkdown')}</p>
           )}
 
           <FileList
@@ -137,10 +146,10 @@ function MarkdownPdf() {
 
           {jobs.length > 0 && (
             <div className={styles.outputSection}>
-              <label>Output Directory</label>
+              <label>{t('output.directory')}</label>
               <div className={styles.outputDir}>
-                <span className={styles.dirPath}>{outputDir || 'Same as input'}</span>
-                <button onClick={handleSelectOutputDir}>Change</button>
+                <span className={styles.dirPath}>{outputDir || t('output.sameAsInput')}</span>
+                <button onClick={handleSelectOutputDir}>{t('output.change')}</button>
               </div>
             </div>
           )}
@@ -152,18 +161,20 @@ function MarkdownPdf() {
               disabled={isConverting}
             >
               {isConverting
-                ? 'Converting...'
-                : `Convert ${jobs.filter((j) => j.status === 'pending').length} file(s)`}
+                ? t('actions.converting')
+                : t('actions.convert', {
+                    count: jobs.filter((j) => j.status === 'pending').length,
+                  })}
             </button>
           )}
         </section>
 
         <section className={styles.rightPanel}>
           <div className={styles.panel}>
-            <label className={styles.sectionLabel}>Page</label>
+            <label className={styles.sectionLabel}>{t('markdown.page')}</label>
 
             <div className={styles.group}>
-              <label className={styles.label}>Page size</label>
+              <label className={styles.label}>{t('markdown.pageSize')}</label>
               <div className={styles.chipRow}>
                 {PAGE_SIZES.map((s) => (
                   <button
@@ -178,33 +189,33 @@ function MarkdownPdf() {
             </div>
 
             <div className={styles.group}>
-              <label className={styles.label}>Orientation</label>
+              <label className={styles.label}>{t('markdown.orientation')}</label>
               <div className={styles.chipRow}>
                 <button
                   className={`${styles.chip} ${orientation === 'portrait' ? styles.active : ''}`}
                   onClick={() => setOrientation('portrait')}
                 >
-                  Portrait
+                  {t('markdown.portrait')}
                 </button>
                 <button
                   className={`${styles.chip} ${orientation === 'landscape' ? styles.active : ''}`}
                   onClick={() => setOrientation('landscape')}
                 >
-                  Landscape
+                  {t('markdown.landscape')}
                 </button>
               </div>
             </div>
 
             <div className={styles.group}>
-              <label className={styles.label}>Margins</label>
+              <label className={styles.label}>{t('markdown.margins')}</label>
               <div className={styles.chipRow}>
-                {MARGINS.map((m) => (
+                {MARGINS.map((marginId) => (
                   <button
-                    key={m}
-                    className={`${styles.chip} ${margin === m ? styles.active : ''}`}
-                    onClick={() => setMargin(m)}
+                    key={marginId}
+                    className={`${styles.chip} ${margin === marginId ? styles.active : ''}`}
+                    onClick={() => setMargin(marginId)}
                   >
-                    {m.charAt(0).toUpperCase() + m.slice(1)}
+                    {t(MARGIN_KEYS[marginId])}
                   </button>
                 ))}
               </div>
@@ -212,22 +223,19 @@ function MarkdownPdf() {
           </div>
 
           <div className={styles.panel}>
-            <label className={styles.sectionLabel}>Theme</label>
+            <label className={styles.sectionLabel}>{t('markdown.theme')}</label>
             <div className={styles.chipRow}>
-              {THEMES.map((t) => (
+              {THEMES.map((themeId) => (
                 <button
-                  key={t.id}
-                  className={`${styles.chip} ${theme === t.id ? styles.active : ''}`}
-                  onClick={() => setTheme(t.id)}
+                  key={themeId}
+                  className={`${styles.chip} ${theme === themeId ? styles.active : ''}`}
+                  onClick={() => setTheme(themeId)}
                 >
-                  {t.label}
+                  {t(THEME_KEYS[themeId])}
                 </button>
               ))}
             </div>
-            <p className={styles.hint}>
-              The theme sets the page background, text, and code colors. Backgrounds are
-              preserved in the PDF.
-            </p>
+            <p className={styles.hint}>{t('markdown.themeHint')}</p>
           </div>
         </section>
       </div>

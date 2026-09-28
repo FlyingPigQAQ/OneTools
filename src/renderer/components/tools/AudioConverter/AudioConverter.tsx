@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAudioConverter } from '../../../hooks/useAudioConverter';
 import { useFileDrop } from '../../../hooks/useFileDrop';
+import { useI18n } from '../../../hooks/useI18n';
 import DropZone from '../../common/DropZone';
 import FileList from '../../common/FileList';
 import FormatSelector from './FormatSelector';
@@ -10,6 +11,7 @@ import ToolHeader from '../../common/ToolHeader';
 import styles from './AudioConverter.module.css';
 
 function AudioConverter() {
+  const { t } = useI18n();
   const {
     jobs,
     isConverting,
@@ -100,12 +102,12 @@ function AudioConverter() {
   return (
     <div className={styles.container}>
       <ToolHeader
-        title="Audio Converter"
-        subtitle="Convert audio files between different formats"
+        title={t('tools.audioConverter.title')}
+        subtitle={t('tools.audioConverter.subtitle')}
         number="01"
       />
       {ffmpegReady === false && (
-        <div className={styles.warning}>⚠️ FFmpeg not found. Some features may not work.</div>
+        <div className={styles.warning}>{t('warnings.ffmpegMissing')}</div>
       )}
 
       <div className={styles.content}>
@@ -120,9 +122,7 @@ function AudioConverter() {
           />
 
           {jobs.length === 0 && (
-            <p className={styles.emptyHint}>
-              No files added yet. Drag audio files above or click to browse.
-            </p>
+            <p className={styles.emptyHint}>{t('files.emptyAudio')}</p>
           )}
 
           <FileList
@@ -133,10 +133,10 @@ function AudioConverter() {
 
           {jobs.length > 0 && (
             <div className={styles.outputSection}>
-              <label>Output Directory</label>
+              <label>{t('output.directory')}</label>
               <div className={styles.outputDir}>
-                <span className={styles.dirPath}>{outputDir || 'Same as input'}</span>
-                <button onClick={handleSelectOutputDir}>Change</button>
+                <span className={styles.dirPath}>{outputDir || t('output.sameAsInput')}</span>
+                <button onClick={handleSelectOutputDir}>{t('output.change')}</button>
               </div>
             </div>
           )}
@@ -147,7 +147,11 @@ function AudioConverter() {
               onClick={handleConvert}
               disabled={isConverting}
             >
-              {isConverting ? 'Converting...' : `Convert ${jobs.filter((j) => j.status === 'pending').length} file(s)`}
+              {isConverting
+                ? t('actions.converting')
+                : t('actions.convert', {
+                    count: jobs.filter((j) => j.status === 'pending').length,
+                  })}
             </button>
           )}
         </section>

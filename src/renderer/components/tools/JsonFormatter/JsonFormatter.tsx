@@ -11,14 +11,14 @@ import {
   type JsonValidationError,
   type JsonResult,
 } from '@shared/jsonTools';
-import type { AppError } from '@shared/i18n';
+import type { AppError, MessageKey } from '@shared/i18n';
 import { useI18n } from '../../../hooks/useI18n';
 import styles from './JsonFormatter.module.css';
 
-const INDENTS: { id: IndentOption; label: string }[] = [
-  { id: 2, label: '2 spaces' },
-  { id: 4, label: '4 spaces' },
-  { id: 'tab', label: 'Tab' },
+const INDENTS: { id: IndentOption; labelKey: MessageKey }[] = [
+  { id: 2, labelKey: 'json.indent2' },
+  { id: 4, labelKey: 'json.indent4' },
+  { id: 'tab', labelKey: 'json.indentTab' },
 ];
 
 const SAMPLE = '{"name":"OneTools","tags":["json","formatter"],"nested":{"valid":true,"count":3}}';
@@ -225,9 +225,9 @@ function JsonFormatter() {
     }
     switch (validation.kind) {
       case 'idle':
-        return <span className={styles.statusIdle}>Paste JSON to validate</span>;
+        return <span className={styles.statusIdle}>{t('json.pasteToValidate')}</span>;
       case 'valid':
-        return <span className={styles.statusValid}>✓ Valid JSON</span>;
+        return <span className={styles.statusValid}>✓ {t('json.valid')}</span>;
       case 'invalid': {
         const { error } = validation;
         const where =
@@ -255,8 +255,8 @@ function JsonFormatter() {
   return (
     <div className={styles.container}>
       <ToolHeader
-        title="JSON Formatter"
-        subtitle="Format, validate, minify and escape JSON — entirely offline."
+        title={t('tools.jsonFormatter.title')}
+        subtitle={t('tools.jsonFormatter.subtitle')}
         number="05"
       />
 
@@ -266,46 +266,46 @@ function JsonFormatter() {
           onClick={handleFormat}
           disabled={!canFormat}
         >
-          Format
+          {t('json.format')}
         </button>
         <button
           className={`${styles.actionBtn} ${activeAction === 'minify' ? styles.primary : ''}`}
           onClick={handleMinify}
           disabled={!canFormat}
         >
-          Minify
+          {t('json.minify')}
         </button>
         <button
           className={`${styles.actionBtn} ${activeAction === 'escape' ? styles.primary : ''}`}
           onClick={handleEscape}
           disabled={!canFormat}
         >
-          Escape
+          {t('json.escape')}
         </button>
         <button
           className={`${styles.actionBtn} ${activeAction === 'unescape' ? styles.primary : ''}`}
           onClick={handleUnescape}
           disabled={!canUnescape}
         >
-          Unescape
+          {t('json.unescape')}
         </button>
         <div className={styles.toolbarDivider} />
         <button className={styles.actionBtn} onClick={handleClear} disabled={!hasInput && !output}>
-          Clear
+          {t('json.clear')}
         </button>
         <button className={styles.actionBtn} onClick={handleSample}>
-          Sample
+          {t('json.sample')}
         </button>
 
         <div className={styles.indentGroup}>
-          <span className={styles.indentLabel}>Indent</span>
+          <span className={styles.indentLabel}>{t('json.indent')}</span>
           {INDENTS.map((opt) => (
             <button
               key={String(opt.id)}
               className={`${styles.indentChip} ${indent === opt.id ? styles.active : ''}`}
               onClick={() => handleIndentChange(opt.id)}
             >
-              {opt.label}
+              {t(opt.labelKey)}
             </button>
           ))}
         </div>
@@ -315,7 +315,12 @@ function JsonFormatter() {
         {statusNode}
         {stats && (
           <span className={styles.statusStats}>
-            {stats.bytes} B · {stats.lines} lines · {stats.keys} keys · depth {stats.depth}
+            {t('json.stats', {
+              bytes: stats.bytes,
+              lines: stats.lines,
+              keys: stats.keys,
+              depth: stats.depth,
+            })}
           </span>
         )}
       </div>
@@ -323,7 +328,7 @@ function JsonFormatter() {
       <div className={styles.panes}>
         <div className={styles.pane}>
           <div className={styles.paneHeader}>
-            <span className={styles.paneTitle}>Input</span>
+            <span className={styles.paneTitle}>{t('json.input')}</span>
           </div>
           <div className={styles.editorWrap}>
             <div className={styles.lineNumbers} ref={gutterRef} data-gutter aria-hidden>
@@ -348,7 +353,7 @@ function JsonFormatter() {
                 setActiveAction(null);
               }}
               onScroll={handleScroll}
-              placeholder='Paste JSON here, e.g. {"hello":"world"}'
+              placeholder={t('json.placeholderIn')}
               spellCheck={false}
               autoFocus
             />
@@ -357,18 +362,18 @@ function JsonFormatter() {
 
         <div className={styles.pane}>
           <div className={styles.paneHeader}>
-            <span className={styles.paneTitle}>Output</span>
+            <span className={styles.paneTitle}>{t('json.output')}</span>
             <span>
               <button
                 className={styles.paneAction}
                 onClick={handleUseOutput}
                 disabled={!output}
-                title="Move output back into the input editor"
+                title={t('json.editTitle')}
               >
-                ← Edit
+                {t('json.edit')}
               </button>
               <button className={styles.paneAction} onClick={handleCopy} disabled={!output}>
-                {copied ? 'Copied ✓' : 'Copy'}
+                {copied ? t('json.copied') : t('json.copy')}
               </button>
             </span>
           </div>
@@ -379,18 +384,14 @@ function JsonFormatter() {
               value={output}
               wrap="soft"
               readOnly
-              placeholder="Formatted output appears here"
+              placeholder={t('json.placeholderOut')}
               spellCheck={false}
             />
           </div>
         </div>
       </div>
 
-      <p className={styles.hint}>
-        Validation runs as you type; errors report the line and column when the engine
-        provides them. “Escape” wraps the document in a JSON string literal for embedding;
-        “Unescape” decodes one level of string escaping, including text that is not wrapped in quotes.
-      </p>
+      <p className={styles.hint}>{t('json.hint')}</p>
     </div>
   );
 }
