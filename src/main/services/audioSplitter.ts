@@ -3,6 +3,7 @@ import { BrowserWindow } from 'electron';
 import { join, extname, basename, dirname } from 'path';
 import { readdirSync, unlinkSync } from 'fs';
 import { IPC_EVENTS } from '@shared/constants';
+import { formatAppError, type AppError } from '@shared/i18n';
 import type { SplitJob, ProgressData } from '@shared/types';
 import { ffmpegManager } from './ffmpegManager';
 import { runFfmpeg, getAudioDuration, getBytesPerSec } from './ffmpegRunner';
@@ -26,7 +27,7 @@ export class AudioSplitter {
     job: SplitJob,
     mainWindow: BrowserWindow,
     onProgress: (data: ProgressData) => void,
-    onComplete: (jobId: string, success: boolean, error?: string) => void
+    onComplete: (jobId: string, success: boolean, error?: AppError) => void
   ): Promise<void> {
     await ffmpegManager.resolveBinary();
 
@@ -50,17 +51,23 @@ export class AudioSplitter {
       const bytesPerSec = await getBytesPerSec(job.inputPath, totalDuration);
       segDur = sizeToSegmentDuration(job.options.sizeMB || 0, bytesPerSec);
       if (!segDur) {
-        const msg = 'Could not determine segment duration (need the audio duration).';
-        onComplete(job.id, false, msg);
-        mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: msg });
+        const appError: AppError = {
+          key: 'errors.operationFailed',
+          detail: 'Could not determine segment duration (need the audio duration).',
+        };
+        onComplete(job.id, false, appError);
+        mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: appError });
         return;
       }
     }
 
     if (!segDur || segDur <= 0 || !totalDuration || totalDuration <= 0) {
-      const msg = 'Invalid segment duration or audio duration.';
-      onComplete(job.id, false, msg);
-      mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: msg });
+      const appError: AppError = {
+        key: 'errors.operationFailed',
+        detail: 'Invalid segment duration or audio duration.',
+      };
+      onComplete(job.id, false, appError);
+      mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: appError });
       return;
     }
 
@@ -69,7 +76,7 @@ export class AudioSplitter {
 
     try {
       let allOk = true;
-      let lastError: string | undefined;
+      let lastError: AppError | undefined;
 
       for (let i = 0; i < expected; i++) {
         const start = i * segDur;
@@ -102,17 +109,20 @@ export class AudioSplitter {
         onComplete(job.id, true);
         mainWindow.webContents.send(IPC_EVENTS.SPLIT_COMPLETE, { jobId: job.id });
       } else {
-        if (lastError) console.error(`[OneTools] ${lastError}`);
+        if (lastError) console.error(`[OneTools] ${formatAppError('en', lastError)}`);
         onComplete(job.id, false, lastError);
         mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, { jobId: job.id, error: lastError });
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to split audio';
-      console.error(`[OneTools] Split error: ${errorMsg}`);
-      onComplete(job.id, false, errorMsg);
+      const appError: AppError =
+        err instanceof Error
+          ? { key: 'errors.operationFailed', detail: err.message }
+          : { key: 'errors.operationFailed' };
+      console.error(`[OneTools] Split error: ${formatAppError('en', appError)}`);
+      onComplete(job.id, false, appError);
       mainWindow.webContents.send(IPC_EVENTS.SPLIT_ERROR, {
         jobId: job.id,
-        error: errorMsg,
+        error: appError,
       });
     }
   }

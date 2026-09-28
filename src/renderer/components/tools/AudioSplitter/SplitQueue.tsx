@@ -1,4 +1,5 @@
 import type { SplitJob } from '@shared/types';
+import { useI18n } from '../../../hooks/useI18n';
 import ProgressBar from '../../common/ProgressBar';
 import styles from './SplitQueue.module.css';
 
@@ -11,6 +12,7 @@ interface SplitQueueProps {
 }
 
 function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueProps) {
+  const { formatError } = useI18n();
   const activeJobs = jobs.filter(
     (j) => j.status === 'pending' || j.status === 'converting' || j.status === 'completed' || j.status === 'error'
   );
@@ -70,7 +72,7 @@ function SplitQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: SplitQueueP
               )}
             </div>
 
-            {job.error && <p className={styles.error}>{job.error}</p>}
+            {job.error && <p className={styles.error}>{job.error ? formatError(job.error) : null}</p>}
           </li>
         ))}
       </ul>

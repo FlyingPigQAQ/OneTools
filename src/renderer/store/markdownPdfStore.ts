@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AppError } from '@shared/i18n';
 import type { MarkdownPdfJob } from '@shared/types';
 
 interface MarkdownPdfState {
@@ -10,7 +11,7 @@ interface MarkdownPdfState {
     jobId: string,
     status: MarkdownPdfJob['status'],
     progress?: number,
-    error?: string,
+    error?: AppError,
     fileName?: string,
     outputPath?: string
   ) => void;

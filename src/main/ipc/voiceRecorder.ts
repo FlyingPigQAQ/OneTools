@@ -1,14 +1,15 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { readFileSync } from 'fs';
 import { IPC } from '@shared/constants';
+import type { RecordingStartResult, RecordingStopResult } from '@shared/types';
 import { voiceRecorder } from '../services/voiceRecorder';
 
 export function registerVoiceRecorderIpc(mainWindow: BrowserWindow): void {
-  ipcMain.handle(IPC.START_RECORDING, async (_event, outputDir: string) => {
+  ipcMain.handle(IPC.START_RECORDING, async (_event, outputDir: string): Promise<RecordingStartResult> => {
     return voiceRecorder.start(outputDir, mainWindow);
   });
 
-  ipcMain.handle(IPC.STOP_RECORDING, async () => {
+  ipcMain.handle(IPC.STOP_RECORDING, async (): Promise<RecordingStopResult> => {
     return voiceRecorder.stop();
   });
 

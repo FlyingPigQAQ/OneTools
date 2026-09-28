@@ -1,4 +1,4 @@
-import type { Locale } from '@shared/i18n';
+import type { AppError, Locale } from '@shared/i18n';
 
 export interface PlatformInfo {
   platform: string;
@@ -42,7 +42,7 @@ export interface ConversionJob {
   options: ConversionOptions;
   status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';
   progress: number;
-  error?: string;
+  error?: AppError;
 }
 
 export interface ProgressData {
@@ -56,7 +56,7 @@ export interface ConversionResult {
   jobId: string;
   success: boolean;
   outputPath?: string;
-  error?: string;
+  error?: AppError;
 }
 
 /**
@@ -84,7 +84,7 @@ export interface SplitJob {
   options: SplitOptions;
   status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';
   progress: number;
-  error?: string;
+  error?: AppError;
 }
 
 /**
@@ -114,7 +114,7 @@ export interface MarkdownPdfJob {
   options: MarkdownPdfOptions;
   status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';
   progress: number;
-  error?: string;
+  error?: AppError;
 }
 
 /**
@@ -152,6 +152,14 @@ export interface RecordingResult {
   /** Duration in seconds. */
   duration: number;
 }
+
+export type RecordingStartResult =
+  | { ok: true; jobId: string }
+  | { ok: false; error: AppError };
+
+export type RecordingStopResult =
+  | { ok: true; result: RecordingResult }
+  | { ok: false; error: AppError };
 
 export interface CompletedRecording {
   id: string;
@@ -224,12 +232,12 @@ export interface ElectronAPI {
   offMenu(channel: string, callback: () => void): void;
 
   // Voice Recorder (separate tool)
-  startRecording(options: RecordingOptions): Promise<string>;
-  stopRecording(): Promise<RecordingResult>;
+  startRecording(options: RecordingOptions): Promise<RecordingStartResult>;
+  stopRecording(): Promise<RecordingStopResult>;
   getRecordingState(): Promise<RecordingState>;
   deleteRecording(filePath: string): Promise<boolean>;
   readAudioFile(filePath: string): Promise<Uint8Array<ArrayBuffer>>;
   onRecordingTick(callback: (data: RecordingTickData) => void): () => void;
   onRecordingStopped(callback: (data: RecordingResult) => void): () => void;
-  onRecordingError(callback: (data: { jobId: string; error: string }) => void): () => void;
+  onRecordingError(callback: (data: { jobId: string; error: AppError }) => void): () => void;
 }

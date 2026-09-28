@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
+import { useI18n } from '../../../hooks/useI18n';
 import { useVoiceRecorder } from '../../../hooks/useVoiceRecorder';
 import RecordingList from './RecordingList';
 import ToolHeader from '../../common/ToolHeader';
 import styles from './VoiceRecorder.module.css';
 
 function VoiceRecorder() {
+  const { formatError } = useI18n();
   const {
     isRecording,
     elapsedSec,
@@ -95,7 +97,7 @@ function VoiceRecorder() {
           {/* Error Banner */}
           {error && (
             <div className={styles.error}>
-              <span>{error}</span>
+              <span>{formatError(error)}</span>
               <button className={styles.errorDismiss} onClick={clearError}>
                 ×
               </button>

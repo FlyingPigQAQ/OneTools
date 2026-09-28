@@ -1,4 +1,5 @@
 import type { MarkdownPdfJob } from '@shared/types';
+import { useI18n } from '../../../hooks/useI18n';
 import ProgressBar from '../../common/ProgressBar';
 import styles from './MarkdownPdfQueue.module.css';
 
@@ -11,6 +12,7 @@ interface MarkdownPdfQueueProps {
 }
 
 function MarkdownPdfQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: MarkdownPdfQueueProps) {
+  const { formatError } = useI18n();
   const activeJobs = jobs.filter(
     (j) =>
       j.status === 'pending' ||
@@ -74,7 +76,7 @@ function MarkdownPdfQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: Markd
               )}
             </div>
 
-            {job.error && <p className={styles.error}>{job.error}</p>}
+            {job.error && <p className={styles.error}>{job.error ? formatError(job.error) : null}</p>}
           </li>
         ))}
       </ul>

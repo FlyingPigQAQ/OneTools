@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import { BrowserWindow } from 'electron';
 import { extname, basename, dirname } from 'path';
 import { IPC_EVENTS } from '@shared/constants';
+import { formatAppError, type AppError } from '@shared/i18n';
 import type { ConversionJob, ProgressData } from '@shared/types';
 import { ffmpegManager } from './ffmpegManager';
 import { runFfmpeg, getAudioDuration } from './ffmpegRunner';
@@ -16,14 +17,17 @@ export class AudioConverter {
     job: ConversionJob,
     mainWindow: BrowserWindow,
     onProgress: (data: ProgressData) => void,
-    onComplete: (jobId: string, success: boolean, error?: string) => void
+    onComplete: (jobId: string, success: boolean, error?: AppError) => void
   ): Promise<void> {
     // Ensure ffmpeg binary path is resolved before converting
     await ffmpegManager.resolveBinary();
 
     const format = getFormatById(job.options.format);
     if (!format) {
-      onComplete(job.id, false, `Unknown format: ${job.options.format}`);
+      onComplete(job.id, false, {
+        key: 'errors.operationFailed',
+        detail: `Unknown format: ${job.options.format}`,
+      });
       return;
     }
 
@@ -50,17 +54,20 @@ export class AudioConverter {
         onComplete(job.id, true);
         mainWindow.webContents.send(IPC_EVENTS.CONVERSION_COMPLETE, { jobId: job.id });
       } else {
-        if (res.error) console.error(`[OneTools] ${res.error}`);
+        if (res.error) console.error(`[OneTools] ${formatAppError('en', res.error)}`);
         onComplete(job.id, false, res.error);
         mainWindow.webContents.send(IPC_EVENTS.CONVERSION_ERROR, { jobId: job.id, error: res.error });
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to start conversion';
-      console.error(`[OneTools] Conversion error: ${errorMsg}`);
-      onComplete(job.id, false, errorMsg);
+      const appError: AppError =
+        err instanceof Error
+          ? { key: 'errors.operationFailed', detail: err.message }
+          : { key: 'errors.operationFailed' };
+      console.error(`[OneTools] Conversion error: ${formatAppError('en', appError)}`);
+      onComplete(job.id, false, appError);
       mainWindow.webContents.send(IPC_EVENTS.CONVERSION_ERROR, {
         jobId: job.id,
-        error: errorMsg,
+        error: appError,
       });
     }
   }

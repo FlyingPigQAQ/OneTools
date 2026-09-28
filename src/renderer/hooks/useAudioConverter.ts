@@ -15,7 +15,6 @@ export function useAudioConverter() {
       onComplete: (cb) => window.electronAPI.onConversionComplete(cb),
       onError: (cb) => window.electronAPI.onConversionError(cb),
     },
-    errorLabel: 'Conversion',
     execution: 'parallel',
     dedupeInputs: true,
     createJob: (inputPath, options, id) => ({

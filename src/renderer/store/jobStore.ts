@@ -1,4 +1,5 @@
 import type { StateCreator, StoreApi, UseBoundStore } from 'zustand';
+import type { AppError } from '@shared/i18n';
 
 /** Fields every ffmpeg-style job shares across the audio tools. */
 export interface BaseJob {
@@ -7,7 +8,7 @@ export interface BaseJob {
   fileName: string;
   status: 'pending' | 'converting' | 'completed' | 'error' | 'cancelled';
   progress: number;
-  error?: string;
+  error?: AppError;
 }
 
 /**
@@ -24,7 +25,7 @@ export interface JobStore<TJob extends BaseJob & { options: unknown }> {
     jobId: string,
     status: TJob['status'],
     progress?: number,
-    error?: string
+    error?: AppError
   ) => void;
   updateJobOptions: (jobId: string, options: TJob['options']) => void;
   getPendingJobs: () => TJob[];

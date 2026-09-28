@@ -48,28 +48,25 @@ export function useVoiceRecorder() {
 
   const startRecording = useCallback(async () => {
     if (!store.outputDir) {
-      store.setError('Please select an output directory first.');
+      store.setError({ key: 'errors.outputDirRequired' });
       return;
     }
-    try {
-      store.clearError();
-      await window.electronAPI.startRecording({ outputDir: store.outputDir, format: 'mp3' });
-      store.setRecording(true, Date.now());
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to start recording';
-      store.setError(errorMsg);
+    store.clearError();
+    const started = await window.electronAPI.startRecording({ outputDir: store.outputDir, format: 'mp3' });
+    if (!started.ok) {
+      store.setError(started.error);
+      return;
     }
+    store.setRecording(true, Date.now());
   }, [store.outputDir]);
 
   const stopRecording = useCallback(async () => {
-    try {
-      store.clearError();
-      await window.electronAPI.stopRecording();
-      // The store update happens in the onRecordingStopped listener.
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to stop recording';
-      store.setError(errorMsg);
+    store.clearError();
+    const stopped = await window.electronAPI.stopRecording();
+    if (!stopped.ok) {
+      store.setError(stopped.error);
     }
+    // A successful stop updates the store in the onRecordingStopped listener.
   }, []);
 
   const selectOutputDir = useCallback(async () => {

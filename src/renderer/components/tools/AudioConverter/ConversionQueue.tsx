@@ -1,4 +1,5 @@
 import type { ConversionJob } from '@shared/types';
+import { useI18n } from '../../../hooks/useI18n';
 import ProgressBar from '../../common/ProgressBar';
 import styles from './ConversionQueue.module.css';
 
@@ -11,6 +12,7 @@ interface ConversionQueueProps {
 }
 
 function ConversionQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: ConversionQueueProps) {
+  const { formatError } = useI18n();
   const activeJobs = jobs.filter(
     (j) => j.status === 'pending' || j.status === 'converting' || j.status === 'completed' || j.status === 'error'
   );
@@ -80,7 +82,7 @@ function ConversionQueue({ jobs, onCancel, onRemove, onRetry, onReveal }: Conver
             </div>
 
             {job.error && (
-              <p className={styles.error}>{job.error}</p>
+              <p className={styles.error}>{job.error ? formatError(job.error) : null}</p>
             )}
           </li>
         ))}

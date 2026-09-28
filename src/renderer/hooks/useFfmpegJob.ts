@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AppError } from '@shared/i18n';
 import type { BaseJob, JobStoreApi } from '../store/jobStore';
 import type { ConversionResult, ProgressData } from '@shared/types';
+
+function operationFailed(error: unknown): AppError {
+  return error instanceof Error
+    ? { key: 'errors.operationFailed', detail: error.message }
+    : { key: 'errors.operationFailed' };
+}
 
 /** Max simultaneous ffmpeg processes. Caps at 3 to keep the system responsive. */
 const MAX_CONCURRENCY = Math.min(3, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
@@ -41,8 +48,6 @@ export interface FfmpegJobConfig<TJob extends BaseJob & { options: unknown }> {
   cancelJob: (jobId: string) => Promise<unknown>;
   /** Main → renderer event subscriptions for this tool's channels. */
   events: FfmpegJobEvents;
-  /** Label used in generic error fallbacks, e.g. 'Conversion' or 'Split'. */
-  errorLabel: string;
   /** 'parallel' pools pending jobs (converter); 'sequential' runs one at a time (splitter). */
   execution: 'parallel' | 'sequential';
   /** De-duplicate dropped files against already-queued inputs. */
@@ -133,9 +138,7 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
         try {
           await configRef.current.startJob(job);
         } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : `${configRef.current.errorLabel} failed`;
-          updateJobStatus(job.id, 'error', undefined, errorMsg);
+          updateJobStatus(job.id, 'error', undefined, operationFailed(error));
         }
       };
 
@@ -162,9 +165,7 @@ export function useFfmpegJob<TJob extends BaseJob & { options: unknown }>(
       try {
         await configRef.current.startJob({ ...job, status: 'pending', progress: 0 });
       } catch (error) {
-        const errorMsg =
-          error instanceof Error ? error.message : `${configRef.current.errorLabel} failed`;
-        updateJobStatus(jobId, 'error', undefined, errorMsg);
+        updateJobStatus(jobId, 'error', undefined, operationFailed(error));
       }
       setIsRunning(false);
     },

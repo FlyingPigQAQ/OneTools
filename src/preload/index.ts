@@ -11,7 +11,7 @@ import type {
   RecordingResult,
   ElectronAPI,
 } from '@shared/types';
-import type { Locale } from '@shared/i18n';
+import type { AppError, Locale } from '@shared/i18n';
 
 export type { ElectronAPI };
 
@@ -110,7 +110,7 @@ const api: ElectronAPI = {
   },
 
   onRecordingError: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; error: string }) => callback(data);
+    const handler = (_event: Electron.IpcRendererEvent, data: { jobId: string; error: AppError }) => callback(data);
     ipcRenderer.on(IPC_EVENTS.RECORDING_ERROR, handler);
     return () => ipcRenderer.removeListener(IPC_EVENTS.RECORDING_ERROR, handler);
   },

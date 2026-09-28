@@ -162,4 +162,5 @@
   font-size: var(--font-size-caption);
   color: var(--color-error);
   margin-top: var(--spacing-xs);
+  white-space: pre-wrap;
 }

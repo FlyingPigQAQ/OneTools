@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AppError } from '@shared/i18n';
 import type { CompletedRecording } from '@shared/types';
 
 interface RecorderState {
@@ -7,14 +8,14 @@ interface RecorderState {
   elapsedSec: number;
   outputFileName: string | null;
   outputDir: string;
-  error: string | null;
+  error: AppError | null;
   recordings: CompletedRecording[];
 
   setOutputDir: (dir: string) => void;
   setRecording: (isRecording: boolean, startTime: number | null, outputDir?: string) => void;
   setElapsed: (sec: number) => void;
   stopRecording: (fileName: string) => void;
-  setError: (error: string) => void;
+  setError: (error: AppError) => void;
   clearError: () => void;
   addCompletedRecording: (recording: CompletedRecording) => void;
   removeRecording: (id: string) => void;

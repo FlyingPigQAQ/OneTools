@@ -3,7 +3,13 @@ import { BrowserWindow } from 'electron';
 import { join } from 'path';
 import { unlinkSync } from 'fs';
 import { IPC_EVENTS } from '@shared/constants';
-import type { RecordingState, RecordingResult } from '@shared/types';
+import type { AppError } from '@shared/i18n';
+import type {
+  RecordingState,
+  RecordingResult,
+  RecordingStartResult,
+  RecordingStopResult,
+} from '@shared/types';
 import { ffmpegManager } from './ffmpegManager';
 
 /**
@@ -23,19 +29,20 @@ export class VoiceRecorder {
 
   /**
    * Start recording from the default microphone.
-   * Returns the job ID on success.
+   * Returns a result object so AppError fields survive IPC (Electron drops
+   * custom fields on thrown errors).
    */
   async start(
     outputDir: string,
     mainWindow: BrowserWindow
-  ): Promise<string> {
+  ): Promise<RecordingStartResult> {
     if (this.proc) {
-      throw new Error('A recording is already in progress.');
+      return { ok: false, error: { key: 'errors.recordingInProgress' } };
     }
 
     const ffmpegPath = await ffmpegManager.resolveBinary();
     if (!ffmpegPath) {
-      throw new Error('FFmpeg not found. Please ensure FFmpeg is installed.');
+      return { ok: false, error: { key: 'errors.ffmpegNotFound' } };
     }
 
     // Generate a unique filename based on the current timestamp.
@@ -61,7 +68,16 @@ export class VoiceRecorder {
 
     console.log(`[OneTools] Starting recording: ${args.join(' ')}`);
 
-    this.proc = ffmpegManager.spawn(args);
+    try {
+      this.proc = ffmpegManager.spawn(args);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.cleanup();
+      if (message === 'FFmpeg binary not resolved') {
+        return { ok: false, error: { key: 'errors.ffmpegUnresolved', detail: message } };
+      }
+      return { ok: false, error: { key: 'errors.operationFailed', detail: message } };
+    }
 
     // Collect stderr for error reporting.
     let stderrBuffer = '';
@@ -75,7 +91,10 @@ export class VoiceRecorder {
       const mainWindow = this.mainWindow;
       const jobId = this.jobId;
       this.cleanup();
-      mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, { jobId, error: err.message });
+      mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, {
+        jobId,
+        error: { key: 'errors.operationFailed', detail: err.message },
+      });
     });
 
     this.proc.on('close', (code) => {
@@ -85,10 +104,15 @@ export class VoiceRecorder {
       // Unexpected exit while not stopping
       if (code !== null && code !== 0) {
         const tail = stderrBuffer.trim().split('\n').slice(-5).join('\n');
-        const errorMsg = `FFmpeg exited with code ${code}${tail ? ':\n' + tail : ''}`;
+        const error: AppError = {
+          key: 'errors.ffmpegExit',
+          params: { code: code ?? -1 },
+          ...(tail ? { detail: tail } : {}),
+        };
         const mainWindow = this.mainWindow;
+        const jobId = this.jobId;
         this.cleanup();
-        mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, { jobId: this.jobId, error: errorMsg });
+        mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, { jobId, error });
       }
     });
 
@@ -102,16 +126,16 @@ export class VoiceRecorder {
       });
     }, 200);
 
-    return this.jobId;
+    return { ok: true, jobId: this.jobId };
   }
 
   /**
    * Stop the active recording. Sends SIGINT to FFmpeg so it finalizes the
    * output file gracefully, then resolves with the result.
    */
-  async stop(): Promise<RecordingResult> {
+  async stop(): Promise<RecordingStopResult> {
     if (!this.proc) {
-      throw new Error('No recording is in progress.');
+      return { ok: false, error: { key: 'errors.recordingNotInProgress' } };
     }
 
     this.stopping = true;
@@ -127,9 +151,10 @@ export class VoiceRecorder {
       this.tickInterval = null;
     }
 
-    return new Promise<RecordingResult>((resolve, reject) => {
+    return new Promise<RecordingStopResult>((resolve) => {
       if (!this.proc) {
-        reject(new Error('No recording process.'));
+        this.stopping = false;
+        resolve({ ok: false, error: { key: 'errors.recordingNoProcess' } });
         return;
       }
 
@@ -149,11 +174,14 @@ export class VoiceRecorder {
           };
           mainWindow?.webContents.send(IPC_EVENTS.RECORDING_STOPPED, result);
           console.log(`[OneTools] Recording stopped: ${filePath} (${duration}s)`);
-          resolve(result);
+          resolve({ ok: true, result });
         } else {
-          const errorMsg = `FFmpeg exited with code ${code} while stopping.`;
-          mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, { jobId, error: errorMsg });
-          reject(new Error(errorMsg));
+          const error: AppError = {
+            key: 'errors.ffmpegExit',
+            params: { code },
+          };
+          mainWindow?.webContents.send(IPC_EVENTS.RECORDING_ERROR, { jobId, error });
+          resolve({ ok: false, error });
         }
       });
 

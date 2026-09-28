@@ -15,7 +15,6 @@ export function useAudioSplitter() {
       onComplete: (cb) => window.electronAPI.onSplitComplete(cb),
       onError: (cb) => window.electronAPI.onSplitError(cb),
     },
-    errorLabel: 'Split',
     execution: 'sequential',
     createJob: (inputPath, options, id) => ({
       id,

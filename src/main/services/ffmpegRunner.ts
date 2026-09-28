@@ -3,6 +3,7 @@ import { join } from 'path';
 import { BrowserWindow } from 'electron';
 import { statSync } from 'fs';
 import { IPC_EVENTS } from '@shared/constants';
+import type { AppError } from '@shared/i18n';
 import type { ProgressData } from '@shared/types';
 import { ffmpegManager } from './ffmpegManager';
 
@@ -20,7 +21,7 @@ export function runFfmpeg(
   args: string[],
   computePercent: (outTimeMs: number) => number,
   progressEvent: string = IPC_EVENTS.CONVERSION_PROGRESS
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: AppError }> {
   return new Promise((resolve) => {
     const proc = ffmpegManager.spawn(args);
 
@@ -79,7 +80,11 @@ export function runFfmpeg(
         const tail = stderrBuffer.trim().split('\n').slice(-5).join('\n');
         resolve({
           success: false,
-          error: `FFmpeg exited with code ${code}${tail ? ':\n' + tail : ''}`,
+          error: {
+            key: 'errors.ffmpegExit',
+            params: { code: code ?? -1 },
+            ...(tail ? { detail: tail } : {}),
+          },
         });
       }
     });
@@ -87,7 +92,10 @@ export function runFfmpeg(
     proc.on('error', (error) => {
       if (settled) return;
       settled = true;
-      resolve({ success: false, error: error.message });
+      resolve({
+        success: false,
+        error: { key: 'errors.operationFailed', detail: error.message },
+      });
     });
   });
 }

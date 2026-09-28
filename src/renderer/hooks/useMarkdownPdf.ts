@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AppError } from '@shared/i18n';
 import { useMarkdownPdfStore } from '../store/markdownPdfStore';
 import type {
   MarkdownPdfJob,
@@ -9,6 +10,12 @@ import type {
   MarkdownTheme,
   ProgressData,
 } from '@shared/types';
+
+function operationFailed(error: unknown): AppError {
+  return error instanceof Error
+    ? { key: 'errors.operationFailed', detail: error.message }
+    : { key: 'errors.operationFailed' };
+}
 
 let jobIdCounter = 0;
 
@@ -72,8 +79,7 @@ export function useMarkdownPdf() {
         try {
           await window.electronAPI.startMarkdownPdf(jobWithOptions);
         } catch (error) {
-          const errorMsg = error instanceof Error ? error.message : 'Conversion failed';
-          updateJobStatus(job.id, 'error', undefined, errorMsg);
+          updateJobStatus(job.id, 'error', undefined, operationFailed(error));
         }
       }
 
@@ -100,8 +106,7 @@ export function useMarkdownPdf() {
       try {
         await window.electronAPI.startMarkdownPdf({ ...job, status: 'pending', progress: 0 });
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Conversion failed';
-        updateJobStatus(jobId, 'error', undefined, errorMsg);
+        updateJobStatus(jobId, 'error', undefined, operationFailed(error));
       }
       setIsConverting(false);
     },

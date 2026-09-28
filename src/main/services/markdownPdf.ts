@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import { readFile, writeFile } from 'fs/promises';
 import { basename, dirname, extname } from 'path';
 import { IPC_EVENTS } from '@shared/constants';
+import { formatAppError, type AppError } from '@shared/i18n';
 import type {
   MarkdownPdfJob,
   PdfMargin,
@@ -18,6 +19,15 @@ import { resolveUniqueOutputPath } from '../utils/outputPath';
  * events. Shared infra is limited to `resolveUniqueOutputPath` (output-conflict
  * avoidance) and the common `ProgressData`/`ConversionResult` event shapes.
  */
+function isAppError(value: unknown): value is AppError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'key' in value &&
+    typeof (value as { key: unknown }).key === 'string'
+  );
+}
+
 export class MarkdownPdfConverter {
   /** Active hidden render windows keyed by job id, so cancel can destroy them. */
   private activeWindows = new Map<string, BrowserWindow>();
@@ -43,9 +53,11 @@ export class MarkdownPdfConverter {
       try {
         markdown = await readFile(job.inputPath, 'utf-8');
       } catch (err) {
-        throw new Error(
-          `Could not read file: ${err instanceof Error ? err.message : String(err)}`
-        );
+        const appError: AppError = {
+          key: 'errors.fileReadFailed',
+          detail: err instanceof Error ? err.message : String(err),
+        };
+        throw appError;
       }
       sendProgress(20);
 
@@ -71,9 +83,12 @@ export class MarkdownPdfConverter {
         win.webContents.once(
           'did-fail-load',
           (_event, code, description) => {
-            reject(
-              new Error(`Failed to load document for printing (${code}): ${description}`)
-            );
+            const appError: AppError = {
+              key: 'errors.printLoadFailed',
+              params: { code },
+              detail: description,
+            };
+            reject(appError);
           }
         );
         win.loadURL(dataUrl).catch(reject);
@@ -116,12 +131,17 @@ export class MarkdownPdfConverter {
         this.cancelledJobs.delete(job.id);
         return;
       }
-      const errorMsg = err instanceof Error ? err.message : 'Failed to convert Markdown to PDF';
-      console.error(`[OneTools] Markdown→PDF error: ${errorMsg}`);
+      const appError: AppError = isAppError(err)
+        ? err
+        : {
+            key: 'errors.operationFailed',
+            detail: err instanceof Error ? err.message : String(err),
+          };
+      console.error(`[OneTools] Markdown→PDF error: ${formatAppError('en', appError)}`);
       mainWindow.webContents.send(IPC_EVENTS.MD_PDF_ERROR, {
         jobId: job.id,
         success: false,
-        error: errorMsg,
+        error: appError,
       });
     }
   }
